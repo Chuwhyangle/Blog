@@ -1,0 +1,13 @@
+---
+import Layout from '../layouts/Layout.astro';
+import Search from 'astro-pagefind/components/Search.astro';
+---
+<Layout title="站内搜索" description="使用 Pagefind 站内搜索 LeyanWC 博客">
+  <h1>站内搜索</h1>
+  <p style="color: var(--fg-soft);">使用 <strong>Pagefind</strong> 的构建期索引，纯前端，零运行成本。</p>
+  <Search
+    searchboxOptions={{
+      "ui": { "translations": { "placeholder": "搜索文章…", "zero_results": "没有找到结果" } },
+    }}
+  />
+</Layout>

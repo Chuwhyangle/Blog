@@ -1,0 +1,39 @@
+---
+import { getCollection } from 'astro:content';
+import Layout from '../layouts/Layout.astro';
+
+const posts = (await getCollection('posts', ({ data }) => !data.draft))
+  .sort((a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf())
+  .slice(0, 5);
+---
+<Layout title="LeyanWC · Blog" description="LeyanWC 的技术博客：RAG、检索、MySQL、工程实践">
+  <section>
+    <h1>嗨，我是 LeyanWC</h1>
+    <p style="color: var(--fg-soft);">
+      这里记录我在 <strong>RAG / 检索 / MySQL / 工程实践</strong> 上的实测与思考。
+      所有文章都尽量带真实数字 — 曲线、延迟、参数。
+    </p>
+
+    <h2>最新文章</h2>
+    <ul class="post-list">
+      {
+        posts.map((post) => (
+          <li>
+            <a href={`/posts/${post.id}`}>
+              <h2>{post.data.title}</h2>
+              <time datetime={post.data.pubDate.toISOString()}>
+                {post.data.pubDate.toLocaleDateString('zh-CN')}
+              </time>
+              {post.data.tags.length > 0 && (
+                <div class="tags">
+                  {post.data.tags.map((t) => <span class="tag">{t}</span>)}
+                </div>
+              )}
+            </a>
+          </li>
+        ))
+      }
+    </ul>
+    <p style="margin-top: 24px;"><a href="/posts/">查看全部文章 →</a></p>
+  </section>
+</Layout>

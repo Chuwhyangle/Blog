@@ -1,0 +1,56 @@
+---
+// L0 全局布局：公开技术博客
+// 备案号占位：P0 完成后填入真实 ICP 备案号与公安备案号
+interface Props {
+  title: string;
+  description?: string;
+}
+const { title, description } = Astro.props;
+const siteTitle = 'LeyanWC · Blog';
+const pageTitle = title === siteTitle ? siteTitle : `${title} — ${siteTitle}`;
+const desc = description ?? 'LeyanWC 的技术博客：RAG、检索、MySQL、工程实践';
+
+// 导入全局样式
+import '../styles/global.css';
+---
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="generator" content={Astro.generator} />
+    <title>{pageTitle}</title>
+    <meta name="description" content={desc} />
+    <link rel="canonical" href={new URL(Astro.url.pathname, Astro.site)} />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="sitemap" href="/sitemap-index.xml" />
+    <meta name="robots" content="index, follow" />
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="wrap">
+        <a class="logo" href="/">LeyanWC<span>.Blog</span></a>
+        <nav>
+          <a href="/">首页</a>
+          <a href="/posts">文章</a>
+          <a href="/search">搜索</a>
+          <a href="/about">关于</a>
+        </nav>
+      </div>
+    </header>
+
+    <main class="wrap">
+      <slot />
+    </main>
+
+    <footer class="site-footer">
+      <div class="wrap">
+        <p>© {new Date().getFullYear()} LeyanWC</p>
+        <p class="beian">
+          <!-- P0 完成后替换为真实备案号 -->
+          <a href="https://beian.miit.gov.cn" target="_blank" rel="noopener">ICP备案号：待填</a>
+        </p>
+      </div>
+    </footer>
+  </body>
+</html>

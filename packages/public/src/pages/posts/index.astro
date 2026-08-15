@@ -1,0 +1,48 @@
+---
+import { getCollection } from 'astro:content';
+import Layout from '../../layouts/Layout.astro';
+
+const posts = (await getCollection('posts', ({ data }) => !data.draft))
+  .sort((a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf());
+const total = posts.length;
+const pageSize = 10;
+const currentPage = Number(Astro.url.searchParams.get('page') ?? 1);
+const totalPages = Math.max(1, Math.ceil(total / pageSize));
+const pagePosts = posts.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+---
+<Layout title="全部文章" description="LeyanWC 博客全部文章列表">
+  <h1>全部文章 <span style="font-size: 1rem; color: var(--fg-soft);">({total})</span></h1>
+  <ul class="post-list">
+    {
+      pagePosts.map((post) => (
+        <li>
+          <a href={`/posts/${post.id}`}>
+            <h2>{post.data.title}</h2>
+            <time datetime={post.data.pubDate.toISOString()}>
+              {post.data.pubDate.toLocaleDateString('zh-CN')}
+            </time>
+            {post.data.tags.length > 0 && (
+              <div class="tags">
+                {post.data.tags.map((t) => <span class="tag">{t}</span>)}
+              </div>
+            )}
+          </a>
+        </li>
+      ))
+    }
+  </ul>
+
+  {
+    totalPages > 1 && (
+      <nav class="pagination">
+        {currentPage > 1
+          ? <a href={`/posts/?page=${currentPage - 1}`}>← 上一页</a>
+          : <span class="disabled">← 上一页</span>}
+        <span>第 {currentPage} / {totalPages} 页</span>
+        {currentPage < totalPages
+          ? <a href={`/posts/?page=${currentPage + 1}`}>下一页 →</a>
+          : <span class="disabled">下一页 →</span>}
+      </nav>
+    )
+  }
+</Layout>

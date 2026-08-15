@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from db import get_db
-from models import Entry, Credential
+from models import Entry, Credential, SigningKey
 from security.sessions import require_session, get_session
 from schemas import EntryIn, EntryOut
 
@@ -70,6 +70,10 @@ def create_entry(body: EntryIn, request: Request, db: Session = Depends(get_db))
     if body.visibility == "private" and (body.dek_reader or body.dek_reader_iv):
         raise HTTPException(422, "private 条目不得携带 reader 封套")
 
+    # 签名公钥必须已登记（服务端只认它见过的公钥）
+    if not db.query(SigningKey).filter(SigningKey.key_id == body.signing_key_id).first():
+        raise HTTPException(422, "signing_key_id 未登记")
+
     entry = Entry(
         id=body.id,
         visibility=body.visibility,
@@ -104,7 +108,9 @@ def update_entry(entry_id: str, body: EntryIn, request: Request, db: Session = D
         raise HTTPException(404, "条目不存在")
 
     # 裁决 ⑩ Q1b：id / created_at / signing_key_id 写入后不可变，忽略客户端请求值
-    # updated_at 允许更新（编辑条目必然变化）
+    # + 必须仍指向已登记公钥
+    if body.signing_key_id != e.signing_key_id:
+        raise HTTPException(422, "signing_key_id 不可变更")
     e.visibility = body.visibility
     e.updated_at = body.updated_at
     e.ciphertext = body.ciphertext

@@ -67,12 +67,20 @@ def get_session(db: Session, request: Request) -> SessionRow | None:
     if not row:
         return None
     now = datetime.now(timezone.utc)
-    if row.expires_at < now:
+    # 归一化：SQLite 方言可能返回 str；MySQL 返回 aware datetime（按 UTC 存）
+    def _as_dt(v):
+        if isinstance(v, str):
+            return datetime.fromisoformat(v.replace('Z', '+00:00'))
+        if v.tzinfo is None:
+            return v.replace(tzinfo=timezone.utc)
+        return v
+    expires_at = _as_dt(row.expires_at)
+    if expires_at < now:
         db.delete(row)
         db.commit()
         return None
     # owner 滑动续期（每次请求刷新 TTL）
-    if row.role == "owner" and row.expires_at - now < timedelta(days=29):
+    if row.role == "owner" and expires_at - now < timedelta(days=29):
         row.expires_at = now + TTL["owner"]
     row.last_seen_at = now
     db.commit()

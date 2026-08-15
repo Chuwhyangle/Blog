@@ -17,3 +17,8 @@ Thumbs.db
 # 本地备份 / 临时
 *.log
 tmp/
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/

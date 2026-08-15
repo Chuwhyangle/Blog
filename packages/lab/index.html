@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lab · LeyanWC 小实验</title>
+  <meta name="robots" content="noindex, nofollow">
+  <style>
+    :root {
+      --bg: #0f1117; --card: #1a1d27; --fg: #e6e8ee; --muted: #9aa1ae;
+      --accent: #6c9ef8; --border: #2a2e3a;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100vh;
+      font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+      background: var(--bg); color: var(--fg);
+    }
+    .wrap { max-width: 860px; margin: 0 auto; padding: 48px 24px; }
+    h1 { font-size: 1.6rem; margin: 0 0 6px; }
+    p.sub { color: var(--muted); margin: 0 0 36px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 16px; }
+    a.card {
+      display: block; text-decoration: none; color: var(--fg);
+      background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+      padding: 20px; transition: transform .15s, border-color .15s;
+    }
+    a.card:hover { transform: translateY(-2px); border-color: var(--accent); }
+    a.card h2 { margin: 0 0 8px; font-size: 1.05rem; color: var(--accent); }
+    a.card p { margin: 0; color: var(--muted); font-size: .88rem; line-height: 1.5; }
+    footer { margin-top: 48px; color: var(--muted); font-size: .8rem; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>⚗️ Lab · 小实验</h1>
+    <p class="sub">口令保护的个人 demo 区。随便玩，坏了不负责。</p>
+
+    <div class="grid">
+      <a class="card" href="./color-picker/">
+        <h2>🎨 Color Picker</h2>
+        <p>HSL 调色板 + 十六进制转码。小试 CSS 变量与原生交互。</p>
+      </a>
+      <a class="card" href="./canvas-toy/">
+        <h2>🌀 Canvas Toy</h2>
+        <p>粒子跟随鼠标的 canvas 小玩具。</p>
+      </a>
+    </div>
+
+    <footer>LeyanWC · Lab · <a href="https://leyanwc.xyz" style="color:var(--muted)">主站</a></footer>
+  </div>
+</body>
+</html>

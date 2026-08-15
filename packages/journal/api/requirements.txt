@@ -1,0 +1,10 @@
+# FastAPI 后端依赖（Python 3.11+）
+fastapi>=0.141
+uvicorn[standard]>=0.52
+SQLAlchemy>=2.0
+PyMySQL>=1.2
+cryptography>=50.0
+webauthn>=3.0           # duo-labs py_webauthn（注意：不是 py_webauthn / py-webauthn）
+argon2-cffi>=25.0
+pydantic>=2.13
+pydantic-settings>=2.15

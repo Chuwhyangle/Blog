@@ -49,6 +49,9 @@ CREATE TABLE crypto_params (
   verifier    VARBINARY(64) NOT NULL,              -- 固定串 48B 密文 + 16B GCM tag
   verifier_iv BINARY(12)    NOT NULL,
   key_epoch   INT UNSIGNED  NOT NULL DEFAULT 1,
+  -- 服务端在线校验用（仅 reader 行非空）：Argon2id 标准编码串（$argon2id$...），
+  -- 独立于前端派生 KEK 的 salt/params —— 若同盐同参，服务端拿到 hash 就等于拿到 KEK_reader。
+  password_hash VARCHAR(255) NULL,
   PRIMARY KEY (role)
 ) ENGINE=InnoDB ROW_FORMAT=DYNAMIC;
 

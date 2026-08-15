@@ -31,6 +31,7 @@ export default function Editor({ entry, isOwner, kek, signingKey, onClose, onSav
   async function saveDraft() {
     if (!entry.id) return;
     try {
+      if (!signingKey || !entry.signing_key_id_bytes) return;   // 无签名能力则不自动存
       const kekOwner = keys.owner;
       if (!kekOwner) return;
       const ownerParams = cryptoParams?.owner;
@@ -54,6 +55,9 @@ export default function Editor({ entry, isOwner, kek, signingKey, onClose, onSav
     setBusy(true); setErr('');
     try {
       if (!canSave) return;
+      if (!signingKey || !entry.signing_key_id_bytes) {
+        throw new Error('签名密钥未加载，无法写日记');
+      }
       const kekOwner = keys.owner;
       if (!kekOwner) throw new Error('请先解锁主口令');
       const ownerParams = cryptoParams?.owner;

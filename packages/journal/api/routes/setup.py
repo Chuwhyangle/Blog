@@ -23,9 +23,11 @@ ph = PasswordHasher(time_cost=2, memory_cost=32 * 1024, parallelism=1)
 
 
 def _ensure_bootstrap(db: Session) -> None:
-    """仅在所有凭据为空时允许初始化。"""
-    cnt = db.query(Credential).count()
-    if cnt > 0:
+    """仅在没有签名公钥时允许初始化（首公钥 = 初始化完成的标志）。
+    注意：不能用 credentials 表判空 —— 初始化 Step0 先注册 passkey，
+    之后 step1/step2 继续需要本端点。已有公钥 = 系统已初始化。
+    """
+    if db.query(SigningKey).count() > 0:
         raise HTTPException(403, "已初始化，请使用恢复流程注册新凭据")
 
 
@@ -68,7 +70,7 @@ def setup_passwords(body: dict, request: Request, db: Session = Depends(get_db))
 @router.post("/signing-key")
 def setup_signing_key(body: dict, request: Request, db: Session = Depends(get_db)):
     require_session(db, request)
-    _ensure_bootstrap(db)
+    _ensure_bootstrap(db)   # 仅首公钥（无公钥时）允许
 
     key_id = uuid.UUID(body["key_id"]).bytes
     public_key = base64.b64decode(body["public_key"])

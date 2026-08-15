@@ -9,7 +9,7 @@ import {
 } from '../lib/crypto';
 
 export default function Dashboard() {
-  const { session, clearSession, keys, setKek, signingKeys, signingKey } = useStore();
+  const { session, clearSession, keys, setKek, signingKeys, signingKey, signingKeyId } = useStore();
   const [entries, setEntries] = useState([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(null);       // 正在编辑的条目（含解密后的明文）
@@ -75,7 +75,11 @@ export default function Dashboard() {
     }
     try {
       const plain = await decryptEntry({ ...e, role: isOwner ? 'owner' : 'reader' }, kek);
-      setEditing({ ...e, plain });
+      setEditing({
+        ...e,
+        plain,
+        signing_key_id_bytes: e.signing_key_id ? hexToBytes(e.signing_key_id) : null,
+      });
     } catch (err) {
       alert('解密失败：' + err.message);
     }
@@ -83,8 +87,20 @@ export default function Dashboard() {
 
   // ── 新条目 ──
   function newEntry() {
-    if (isOwner && !keys.owner) { setWriteKey(true); return; }
-    setEditing({ id: null, plain: { title: '', body: '', tags: [] }, visibility: 'private' });
+    if (isOwner && !keys.owner) {
+      setWriteKey(true);
+      return;
+    }
+    if (!signingKey || !signingKeyId) {
+      alert('签名密钥未加载，无法写日记');
+      return;
+    }
+    setEditing({
+      id: null,
+      plain: { title: '', body: '', tags: [] },
+      visibility: 'private',
+      signing_key_id_bytes: signingKeyId,
+    });
   }
 
   return (

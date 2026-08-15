@@ -136,8 +136,8 @@ export default function Setup({ onDone }) {
       const kp = await generateSigningKeyPair();
       const skId = uuidv7Bytes();
 
-      // 2. 本地存不可导出副本（IndexedDB）
-      await idbPut(KEYS.SIGNING_KEY, kp.privateKey);
+      // 2. 本地存不可导出副本（IndexedDB）—— 私钥 + key_id 一起，刷新后能恢复签名
+      await idbPut(KEYS.SIGNING_KEY, { key: kp.privateKey, keyId: Array.from(skId) });
       setSigningKey(kp.privateKey);
       setSigningKeyId(skId);
 

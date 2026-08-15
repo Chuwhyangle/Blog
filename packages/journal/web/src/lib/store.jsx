@@ -36,11 +36,11 @@ export function StoreProvider({ children }) {
         setSigningKeys(sks);
         if (me.authenticated) {
           setSession(me);
-          // 本人：尝试载入签名私钥（IndexedDB）
+          // 本人：尝试载入签名密钥（IndexedDB）—— 私钥 + 其 key_id 一起存
           const sk = await idbGet(KEYS.SIGNING_KEY);
           if (sk) {
-            setSigningKey(sk);
-            // signingKeyId 从公钥推导：服务端返回的 key_id 是 UUIDv7；本地只能存一个关联
+            setSigningKey(sk.key);
+            if (sk.keyId) setSigningKeyId(new Uint8Array(sk.keyId));
           }
         }
       } catch (e) {

@@ -1,0 +1,30 @@
+# journal-api —— L2 FastAPI 服务（P3 会放入实际代码）
+# 部署：sudo cp 到 /etc/systemd/system/journal-api.service
+# 注意：
+#   - User= 部署时改为运行用户（推荐建专用用户 journal，不要 root）
+#   - EnvironmentFile 指向含真实口令的 .env.journal（权限 600）
+#   - FastAPI 监听 127.0.0.1:8000，不直接对外
+
+[Unit]
+Description=Journal API (L2 private diary backend)
+After=network.target mysql.service
+Wants=mysql.service
+
+[Service]
+Type=simple
+User=www-data                       # 部署时改为专用用户（如 journal）
+Group=www-data
+WorkingDirectory=/srv/blog/packages/journal/api
+EnvironmentFile=/srv/blog/deploy/env/.env.journal
+ExecStart=/usr/bin/python3 -m uvicorn main:app --host 127.0.0.1 --port 8000 --workers 1
+Restart=on-failure
+RestartSec=3
+
+# 安全硬化
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ReadWritePaths=/srv/blog
+
+[Install]
+WantedBy=multi-user.target

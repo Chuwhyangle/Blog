@@ -1,0 +1,19 @@
+# Node
+node_modules/
+dist/
+.astro/
+
+# 环境与密钥
+deploy/env/.env*
+!deploy/env/.env.example
+*.pem
+*.key
+.htpasswd*
+
+# 系统
+.DS_Store
+Thumbs.db
+
+# 本地备份 / 临时
+*.log
+tmp/

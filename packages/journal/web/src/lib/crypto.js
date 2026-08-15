@@ -56,24 +56,29 @@ export function hexToBytes(hex) {
 
 // ── Argon2id 派生（Web Worker，不冻结 UI ── ⑪ Q5）──────
 // 用 Vite ?worker 导入：无需 importScripts 网络路径，构建期打包 + 内联。
-const worker = new KdfWorker();
+let worker = null;
+function getWorker() {
+  if (!worker) worker = new KdfWorker();
+  return worker;
+}
 export function deriveKEK(password, salt, params) {
+  const w = getWorker();
   return new Promise((resolve, reject) => {
     const onMsg = (e) => {
-      worker.removeEventListener('message', onMsg);
-      worker.removeEventListener('error', onErr);
+      w.removeEventListener('message', onMsg);
+      w.removeEventListener('error', onErr);
       if (e.data.error) reject(new Error(e.data.error));
       else resolve(hexToBytes(e.data.hashHex));
     };
     const onErr = (e) => {
-      worker.removeEventListener('message', onMsg);
-      worker.removeEventListener('error', onErr);
+      w.removeEventListener('message', onMsg);
+      w.removeEventListener('error', onErr);
       reject(e);
     };
-    worker.addEventListener('message', onMsg);
-    worker.addEventListener('error', onErr);
+    w.addEventListener('message', onMsg);
+    w.addEventListener('error', onErr);
     const saltB64 = salt instanceof Uint8Array ? b64encode(salt) : salt;
-    worker.postMessage({ password, saltB64, params });
+    w.postMessage({ password, saltB64, params });
   });
 }
 
@@ -101,19 +106,17 @@ async function aesGcmDecrypt(keyBytes, ciphertext, iv) {
 // ── UUIDv7（客户端生成，前 48 位毫秒时间戳 ── ⑩ Q3）────
 export function uuidv7Bytes() {
   const now = Date.now();
-  const b = new Uint8Array(16);
-  // 48 位毫秒时间戳
+  const b = crypto.getRandomValues(new Uint8Array(16));   // 先随机整块
+  // 前 48 位毫秒时间戳
   b[0] = (now / 2 ** 40) & 0xff;
   b[1] = (now / 2 ** 32) & 0xff;
   b[2] = (now / 2 ** 24) & 0xff;
   b[3] = (now / 2 ** 16) & 0xff;
   b[4] = (now / 2 ** 8) & 0xff;
   b[5] = now & 0xff;
-  // 版本与变体
+  // 版本与变体（写在随机之后，避免被覆盖）
   b[6] = (b[6] & 0x0f) | 0x70;   // version 7
   b[8] = (b[8] & 0x3f) | 0x80;   // variant 10xx
-  crypto.getRandomValues(b.subarray(6, 16));   // 剩余 62 bit 随机
-  b[7] = (b[7] & 0x0f) | 0x70;
   return b;
 }
 

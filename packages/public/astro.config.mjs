@@ -5,7 +5,7 @@ import pagefind from 'astro-pagefind';
 
 // https://astro.build/config
 export default defineConfig({
-  site: 'https://leyanwc.xyz',
+  site: 'https://blog.leyanwc.xyz',
   output: 'static',
 
   // Pagefind：构建期静态索引，只含 L0 公开内容（② 站内搜索）

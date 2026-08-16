@@ -16,7 +16,7 @@ User=www-data                       # 部署时改为专用用户（如 journal�
 Group=www-data
 WorkingDirectory=/srv/blog/packages/journal/api
 EnvironmentFile=/srv/blog/deploy/env/.env.journal
-ExecStart=/usr/bin/python3 -m uvicorn main:app --host 127.0.0.1 --port 8000 --workers 1
+ExecStart=/srv/blog/packages/journal/api/.venv/bin/python -m uvicorn main:app --host 127.0.0.1 --port 8000 --workers 1
 Restart=on-failure
 RestartSec=3
 

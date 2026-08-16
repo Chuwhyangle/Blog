@@ -44,7 +44,7 @@ export default function Setup({ onDone }) {
           pubKeyCredParams: [{ type: 'public-key', alg: -7 }],   // ES256
           timeout: 120000,
           authenticatorSelection: {
-            authenticatorAttachment: 'platform',
+            // 不强制平台认证器：Windows Hello / USB 钥匙 / 手机跨设备皆可（用户环境不可控）
             residentKey: 'required',
             userVerification: 'required',
           },

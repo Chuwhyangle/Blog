@@ -30,7 +30,6 @@ from webauthn.helpers import base64url_to_bytes, bytes_to_base64url
 from webauthn.helpers.structs import (
     RegistrationCredential, AuthenticationCredential,
     AuthenticatorSelectionCriteria, ResidentKeyRequirement, UserVerificationRequirement,
-    AuthenticatorAttachment,
 )
 
 router = APIRouter(prefix="/api/webauthn", tags=["webauthn"])
@@ -114,7 +113,7 @@ def register_options(request: Request, db: Session = Depends(get_db)):
         challenge=challenge,
         timeout=120_000,
         authenticator_selection=AuthenticatorSelectionCriteria(
-            authenticator_attachment=AuthenticatorAttachment.PLATFORM,  # 与前端 Setup 一致（本机 passkey）
+
             resident_key=ResidentKeyRequirement.REQUIRED,
             user_verification=UserVerificationRequirement.REQUIRED,
         ),

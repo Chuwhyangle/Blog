@@ -10,20 +10,21 @@ function Gate() {
   const { session, loading } = useStore();
   const [needSetup, setNeedSetup] = useState(false);
 
-  // 判定是否需要初始化（服务端无任何凭据/公钥时）
+  // 判定是否需要初始化（服务端无任何签名公钥时）—— 不依赖登录态：
+  // 首次打开（未登录）也应直接进入设置向导
   useEffect(() => {
-    if (loading || !session) return;
+    if (loading) return;
     (async () => {
       try {
         const keys = await api.signingKeys();
         if (keys.length === 0) setNeedSetup(true);
       } catch {}
     })();
-  }, [loading, session]);
+  }, [loading]);
 
   if (loading) return <div className="boot">加载中…</div>;
-  if (!session) return <Login onAuthed={() => {}} />;
   if (needSetup) return <Setup onDone={() => setNeedSetup(false)} />;
+  if (!session) return <Login onAuthed={() => {}} />;
   return <Dashboard />;
 }
 

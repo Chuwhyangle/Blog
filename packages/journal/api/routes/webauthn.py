@@ -24,8 +24,8 @@ from schemas import (
 from webauthn import (
     generate_registration_options, verify_registration_response,
     generate_authentication_options, verify_authentication_response,
-    options_to_json,
 )
+from webauthn.helpers.options_to_json import options_to_json_dict
 from webauthn.helpers import base64url_to_bytes, bytes_to_base64url
 from webauthn.helpers.structs import (
     RegistrationCredential, AuthenticationCredential,
@@ -87,21 +87,24 @@ def register_options(request: Request, db: Session = Depends(get_db)):
     权限：正常注册（can_write=0 设备）需已有 effective owner 会话；
           can_write=1 注册只在 elevated 会话下放行（⑩ Q1a）。
     """
-    sess = require_session(db, request)   # 必须登录（本人）
+    sess = None
+    # 例外：首次初始化（credentials 表为空）→ 匿名 bootstrap 注册首个写凭据
+    bootstrap = db.query(Credential).count() == 0
+    if not bootstrap:
+        sess = require_session(db, request)
 
     # 前端要求 can_write=1 时，必须是 elevated 会话，
-    # 例外：首次初始化（credentials 表为空）→ 允许 bootstrap 注册首个写凭据。
+    # 例外：bootstrap（首注册）直接放行。
     want_write = request.query_params.get("can_write") == "1"
-    bootstrap = db.query(Credential).count() == 0
-    if want_write and sess.role != "elevated" and not bootstrap:
+    if want_write and (sess is None or sess.role != "elevated") and not bootstrap:
         raise HTTPException(403, "注册写密钥需要恢复流程（elevated 会话）")
 
     challenge = _make_challenge()
     purpose = "register"
     _store_challenge(db, challenge, purpose)
 
-    # 用户 id：固定为作者的稳定标识（个人日记单用户）
-    user_id = _bytes_to_b64url(hashlib.sha256(b"leyanwc-journal-owner").digest()[:16])
+    # 用户 id：固定为作者的稳定标识（个人日记单用户）—— generate_registration_options 需要 bytes
+    user_id = hashlib.sha256(b"leyanwc-journal-owner").digest()[:16]
     options = generate_registration_options(
         rp_id=settings.rp_id,
         rp_name=settings.rp_name,
@@ -111,15 +114,21 @@ def register_options(request: Request, db: Session = Depends(get_db)):
         challenge=challenge,
         timeout=120_000,
         authenticator_selection=AuthenticatorSelectionCriteria(
-            authenticator_attachment=(
-                AuthenticatorAttachment.CROSS_PLATFORM if want_write
-                else AuthenticatorAttachment.PLATFORM
-            ),
+            authenticator_attachment=AuthenticatorAttachment.PLATFORM,  # 与前端 Setup 一致（本机 passkey）
             resident_key=ResidentKeyRequirement.REQUIRED,
             user_verification=UserVerificationRequirement.REQUIRED,
         ),
     )
-    return JSONResponse(options_to_json(options))
+    data = options_to_json_dict(options)
+    return JSONResponse({
+        "challenge": data["challenge"],
+        "rp_id": data["rp"]["id"],
+        "rp_name": data["rp"]["name"],
+        "user_id": data["user"]["id"],
+        "user_name": data["user"]["name"],
+        "user_display_name": data["user"]["displayName"],
+        "publicKey": data,
+    })
 
 
 @router.post("/register/verify")
@@ -128,7 +137,10 @@ def register_verify(body: WebAuthnRegisterVerifyIn, request: Request, db: Sessio
     - 默认（device 注册）→ 0
     - elevated 会话 + can_write=True → 1（⑩ Q1a 恢复流程）
     """
-    sess = require_session(db, request)
+    sess = None
+    bootstrap = db.query(Credential).count() == 0
+    if not bootstrap:
+        sess = require_session(db, request)
 
     cred = body.credential
     raw_id = _b64url_to_bytes(cred["id"])
@@ -154,7 +166,7 @@ def register_verify(body: WebAuthnRegisterVerifyIn, request: Request, db: Sessio
 
     # 写权限：默认 False；elevated 会话授权 can_write=1 或 bootstrap（首个凭据）才放行
     can_write = False
-    if body.can_write and (sess.role == "elevated" or db.query(Credential).count() == 0):
+    if body.can_write and ((sess is not None and sess.role == "elevated") or bootstrap):
         can_write = True
 
     db.add(Credential(
@@ -166,7 +178,16 @@ def register_verify(body: WebAuthnRegisterVerifyIn, request: Request, db: Sessio
         created_at=datetime.now(timezone.utc),
     ))
     db.commit()
-    return {"ok": True, "can_write": can_write}
+
+    # bootstrap 或本人注册后直接建立 owner 会话（设置向导需要登录态）
+    token = create_session(
+        db, role="owner", credential_id=raw_id, can_write=can_write,
+        ip=parse_ip(request.client.host if request.client else None),
+        user_agent=request.headers.get("user-agent"),
+    )
+    resp = JSONResponse({"ok": True, "can_write": can_write, "role": "owner"})
+    set_session_cookie(resp, token)
+    return resp
 
 
 # ── 断言（登录）───────────────────────────────────────
@@ -180,7 +201,12 @@ def login_options(request: Request, db: Session = Depends(get_db)):
         timeout=120_000,
         user_verification=UserVerificationRequirement.REQUIRED,
     )
-    return JSONResponse(options_to_json(options))
+    data = options_to_json_dict(options)
+    return JSONResponse({
+        "challenge": data["challenge"],
+        "rp_id": data["rpId"],
+        "publicKey": data,
+    })
 
 
 @router.post("/login/verify")

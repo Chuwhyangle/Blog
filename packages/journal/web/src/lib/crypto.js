@@ -19,6 +19,14 @@ const AES = 'AES-GCM';
 const ED = 'Ed25519';
 const SIGNATURE_MAGIC = new TextEncoder().encode('JRNLSIG1');   // 8 字节域分隔
 
+// 恢复码派生 salt：固定值（SHA-256("leyanwc-journal-recovery-v1") 前 32B）
+// 恢复码本身是 256bit 随机熵，无彩虹表风险，不需要随机 salt；
+// 固定 salt 才能保证「初始化托管」与「恢复解封」派生同一 KEK（⑩ Q1a 闭环）
+export const RECOVERY_SALT = new Uint8Array([
+  78, 129, 95, 14, 216, 152, 91, 182, 139, 4, 108, 135, 244, 202, 121, 58,
+  154, 251, 71, 59, 254, 3, 12, 22, 85, 149, 44, 74, 86, 86, 99, 136,
+]);
+
 // owner / reader KDF 参数（⑪ Q5：两套参数）
 // params 形如 { m: 65536, t: 3, p: 1 }（argon2-browser 用 KiB 语义）
 export const KDF_PARAMS = {

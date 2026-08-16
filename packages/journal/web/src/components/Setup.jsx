@@ -9,7 +9,7 @@ import { api } from '../lib/api';
 import { useStore } from '../lib/store';
 import { idbPut, KEYS } from '../lib/idb';
 import {
-  deriveKEK, KDF_PARAMS, generateSigningKeyPair, bytesToHex, b64encode, uuidv7Bytes,
+  deriveKEK, KDF_PARAMS, RECOVERY_SALT, generateSigningKeyPair, bytesToHex, b64encode, uuidv7Bytes,
   aesGcmEncrypt,
 } from '../lib/crypto';
 
@@ -147,7 +147,8 @@ export default function Setup({ onDone }) {
       setRecCode(rec);
 
       // 4. 托管：Enc(KEK_recovery, KEK_owner) + Enc(KEK_recovery, sk)
-      const kekRecovery = await deriveKEK(rec, crypto.getRandomValues(new Uint8Array(32)), KDF_PARAMS.recovery);
+      //    KEK_recovery 用固定 salt 派生（RECOVERY_SALT）——恢复时才能重派生同一 KEK
+      const kekRecovery = await deriveKEK(rec, RECOVERY_SALT, KDF_PARAMS.recovery);
       const wrappedKekIv = crypto.getRandomValues(new Uint8Array(12));
       const wrappedKek = await aesGcmEncrypt(kekRecovery, keys.owner, wrappedKekIv);
       const wrappedSkIv = crypto.getRandomValues(new Uint8Array(12));

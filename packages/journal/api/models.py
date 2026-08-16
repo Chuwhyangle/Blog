@@ -41,7 +41,9 @@ class CryptoParam(Base):
 
 
 class Credential(Base):
-    """WebAuthn 凭据（⑤ §6 写权限唯一判据）"""
+    """WebAuthn 凭据（⑤ §6 写权限唯一判据）
+    管理员密码登录模式：存一行特殊记录（cred_id=b'admin-password'，password_hash 非空）
+    """
     __tablename__ = "credentials"
 
     cred_id = Column(LargeBinary(255), primary_key=True)
@@ -49,6 +51,7 @@ class Credential(Base):
     sign_count = Column(Integer, nullable=False, default=0)
     can_write = Column(Boolean, nullable=False, default=False)
     label = Column(String(64), nullable=True)
+    password_hash = Column(String(255), nullable=True)   # 管理员密码登录模式用
     created_at = Column(DateTime(3), nullable=False)
 
 

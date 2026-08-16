@@ -57,11 +57,12 @@ CREATE TABLE crypto_params (
 
 -- ── WebAuthn 凭据 ─────────────────────────────────────────
 CREATE TABLE credentials (
-  cred_id     VARBINARY(255)  NOT NULL,            -- WebAuthn credential ID
-  public_key  VARBINARY(512)  NOT NULL,            -- COSE 公钥
+  cred_id     VARBINARY(255)  NOT NULL,            -- WebAuthn credential ID（管理员密码模式：固定 b'admin-password'）
+  public_key  VARBINARY(512)  NOT NULL,            -- COSE 公钥（密码模式留空）
   sign_count  BIGINT UNSIGNED NOT NULL DEFAULT 0,
   can_write   TINYINT(1)      NOT NULL DEFAULT 0,  -- 写权限的唯一判据（⑤ §6）
   label       VARCHAR(64)     NULL,
+  password_hash VARCHAR(255)  NULL,                -- 管理员密码 Argon2id 哈希（密码登录模式）
   created_at  DATETIME(3)     NOT NULL,
   PRIMARY KEY (cred_id)
 ) ENGINE=InnoDB ROW_FORMAT=DYNAMIC;

@@ -37,6 +37,8 @@ export const api = {
   // 会话
   me: () => request('GET', '/me'),
   session: (password) => request('POST', '/session', { password }),
+  adminLogin: (password) => request('POST', '/admin/login', { password }),
+  setupAdminPassword: (password) => request('POST', '/setup/admin-password', { password }),
   logout: () => request('POST', '/logout'),
 
   // WebAuthn

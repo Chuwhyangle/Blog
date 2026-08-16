@@ -9,13 +9,14 @@
 import base64, json, uuid
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
 from argon2 import PasswordHasher
 
 from db import get_db
 from models import Credential, CryptoParam, SigningKey
-from security.sessions import require_session
+from security.sessions import require_session, create_session, set_session_cookie, parse_ip
 
 router = APIRouter(prefix="/api/setup", tags=["setup"])
 
@@ -29,6 +30,41 @@ def _ensure_bootstrap(db: Session) -> None:
     """
     if db.query(SigningKey).count() > 0:
         raise HTTPException(403, "已初始化，请使用恢复流程注册新凭据")
+
+
+@router.post("/admin-password")
+def setup_admin_password(body: dict, request: Request, db: Session = Depends(get_db)):
+    """设置管理员密码（登录身份，替代 passkey 注册）。
+    bootstrap：signing_keys 空时允许；成功后直接建立 owner 会话（设置向导后续步骤需要）。
+    管理员密码 Argon2id 哈希存 credentials 表特殊行（cred_id=b'admin-password'）。
+    """
+    _ensure_bootstrap(db)
+    password = (body.get("password") or "")
+    if len(password) < 8:
+        raise HTTPException(422, "管理员密码至少 8 位")
+
+    row = db.query(Credential).filter(Credential.cred_id == b"admin-password").first()
+    if row:
+        raise HTTPException(403, "管理员密码已设置")
+    db.add(Credential(
+        cred_id=b"admin-password",
+        public_key=b"",
+        sign_count=0,
+        can_write=True,
+        label="管理员密码登录",
+        password_hash=ph.hash(password),
+        created_at=datetime.now(timezone.utc),
+    ))
+    db.commit()
+
+    token = create_session(
+        db, role="owner", credential_id=b"admin-password", can_write=True,
+        ip=parse_ip(request.client.host if request.client else None),
+        user_agent=request.headers.get("user-agent"),
+    )
+    resp = JSONResponse({"ok": True, "can_write": True, "role": "owner"})
+    set_session_cookie(resp, token)
+    return resp
 
 
 @router.post("/passwords")

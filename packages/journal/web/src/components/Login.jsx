@@ -1,4 +1,4 @@
-/** 登录页：本人（WebAuthn passkey）/ 访客（读口令） */
+/** 登录页：本人（管理员密码）/ 访客（读口令） */
 import { useState } from 'react';
 import { api } from '../lib/api';
 import { useStore } from '../lib/store';
@@ -10,40 +10,15 @@ export default function Login({ onAuthed }) {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
-  // ── 本人 passkey 登录 ──
-  async function passkeyLogin() {
+  // ── 本人：管理员密码登录 ──
+  async function adminLogin() {
     setBusy(true); setError('');
     try {
-      const opts = await api.webauthnLoginOptions();
-      const cred = await navigator.credentials.get({
-        publicKey: {
-          challenge: base64urlToBytes(opts.challenge),
-          rpId: opts.rp_id,
-          userVerification: 'required',
-          timeout: 120000,
-        },
-      });
-      const b64url = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf)))
-        .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-      const body = {
-        credential: {
-          id: cred.id,
-          rawId: b64url(cred.rawId),
-          type: cred.type,
-          response: {
-            clientDataJSON: b64url(cred.response.clientDataJSON),
-            authenticatorData: b64url(cred.response.authenticatorData),
-            signature: b64url(cred.response.signature),
-            userHandle: cred.response.userHandle ? b64url(cred.response.userHandle) : null,
-          },
-          challenge: b64url(opts.challenge),
-        },
-      };
-      const res = await api.webauthnLoginVerify(body);
-      setSession({ role: 'owner', can_write: res.can_write, credential_label: res.label });
+      await api.adminLogin(password);
+      setSession({ role: 'owner', can_write: true, credential_label: '管理员' });
       onAuthed();
     } catch (e) {
-      setError(e.message || 'passkey 登录失败');
+      setError(e.message || '登录失败');
     } finally {
       setBusy(false);
     }
@@ -76,11 +51,19 @@ export default function Login({ onAuthed }) {
 
         {tab === 'owner' ? (
           <div className="login-body">
-            <p className="hint">使用设备上的 Windows Hello / 触控 ID 验证身份。</p>
-            <button className="primary" disabled={busy} onClick={passkeyLogin}>
-              {busy ? '验证中…' : '🔐 用 Passkey 登录'}
+            <p className="hint">输入管理员密码登录（主人身份，可写日记）。</p>
+            <input
+              type="password"
+              placeholder="管理员密码"
+              value={password}
+              autoFocus
+              onChange={(e) => setPassword(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && adminLogin()}
+            />
+            <button className="primary" disabled={busy || !password} onClick={adminLogin}>
+              {busy ? '验证中…' : '🔐 登录'}
             </button>
-            <p className="tiny">未初始化？请先完成首次设置（注册 passkey + 主口令 + 恢复码）。</p>
+            <p className="tiny">未初始化？请先完成首次设置（设置管理员密码 + 主口令 + 恢复码）。</p>
           </div>
         ) : (
           <div className="login-body">
@@ -101,12 +84,4 @@ export default function Login({ onAuthed }) {
       </div>
     </div>
   );
-}
-
-function base64urlToBytes(s) {
-  const b64 = s.replace(/-/g, '+').replace(/_/g, '/');
-  const bin = atob(b64);
-  const b = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) b[i] = bin.charCodeAt(i);
-  return b;
 }

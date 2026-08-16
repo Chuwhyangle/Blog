@@ -1,5 +1,5 @@
 /** 首次初始化向导（一次性的关键流程）：
- *  1. 注册主人 passkey（can_write=1）
+ *  1. 设置管理员密码（登录身份，替代 passkey）
  *  2. 设置主口令 + 读口令 → 服务端存 KDF 参数/verifier/口令哈希
  *  3. 生成签名密钥对 → 托管（恢复码加密后上传）→ 本地存不可导出副本
  *  4. 生成恢复码 → 物理保存确认
@@ -15,7 +15,9 @@ import {
 
 export default function Setup({ onDone }) {
   const { setSession, setKek, setSigningKey, setSigningKeyId, keys } = useStore();
-  const [step, setStep] = useState(0);           // 0 passkey → 1 口令 → 2 恢复码
+  const [step, setStep] = useState(0);           // 0 管理员密码 → 1 口令 → 2 恢复码
+  const [adminPw, setAdminPw] = useState('');
+  const [adminPw2, setAdminPw2] = useState('');
   const [mainPw, setMainPw] = useState('');
   const [mainPw2, setMainPw2] = useState('');
   const [readerPw, setReaderPw] = useState('');
@@ -24,53 +26,17 @@ export default function Setup({ onDone }) {
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
 
-  // ── Step 0：注册主人 passkey ──
-  async function registerPasskey() {
+  // ── Step 0：设置管理员密码（服务端 Argon2id 哈希，建 owner 会话）──
+  async function setAdminPassword() {
     setBusy(true); setErr('');
     try {
-      const opts = await api.webauthnRegisterOptions(true);   // can_write=1（elevated 才能注册写钥匙）
-      // ⚠️ 首次初始化时没有 elevated 会话 —— 需要一个"初始化专属"流程：
-      // 服务端在"零凭据"状态下放行首个 can_write=1 注册（bootstrap）。
-      // 需要在路由里补：若 credentials 表为空 → 允许注册写凭据（无需 elevated）。
-      const cred = await navigator.credentials.create({
-        publicKey: {
-          challenge: b64urlToBytes(opts.challenge),
-          rp: { id: opts.rp_id, name: opts.rp_name },
-          user: {
-            id: b64urlToBytes(opts.user_id),
-            name: opts.user_name,
-            displayName: opts.user_display_name,
-          },
-          pubKeyCredParams: [{ type: 'public-key', alg: -7 }],   // ES256
-          timeout: 120000,
-          authenticatorSelection: {
-            // 不强制平台认证器：Windows Hello / USB 钥匙 / 手机跨设备皆可（用户环境不可控）
-            residentKey: 'required',
-            userVerification: 'required',
-          },
-        },
-      });
-      const b64url = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf)))
-        .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-      const body = {
-        credential: {
-          id: cred.id,
-          rawId: b64url(cred.rawId),
-          type: cred.type,
-          response: {
-            clientDataJSON: b64url(cred.response.clientDataJSON),
-            attestationObject: b64url(cred.response.attestationObject),
-          },
-          challenge: b64url(opts.challenge),
-        },
-        label: '主力机',
-        can_write: true,
-      };
-      await api.webauthnRegisterVerify(body);
-      setSession({ role: 'owner', can_write: true, credential_label: '主力机' });
+      if (adminPw.length < 8) throw new Error('管理员密码至少 8 位');
+      if (adminPw !== adminPw2) throw new Error('两次输入不一致');
+      await api.setupAdminPassword(adminPw);
+      setSession({ role: 'owner', can_write: true, credential_label: '管理员' });
       setStep(1);
     } catch (e) {
-      setErr(e.message || 'passkey 注册失败');
+      setErr(e.message || '保存失败');
     } finally {
       setBusy(false);
     }
@@ -192,16 +158,18 @@ export default function Setup({ onDone }) {
       <div className="setup-card">
         <h1>📔 首次设置</h1>
         <div className="steps">
-          <span className={step >= 0 ? 'done' : ''}>1 Passkey</span>
+          <span className={step >= 0 ? 'done' : ''}>1 管理员密码</span>
           <span className={step >= 1 ? 'done' : ''}>2 口令</span>
           <span className={step >= 2 ? 'done' : ''}>3 密钥与恢复码</span>
         </div>
 
         {step === 0 && (
           <div>
-            <p>注册本机 passkey 作为<b>主人身份</b>（可以写日记）。</p>
-            <button className="primary" disabled={busy} onClick={registerPasskey}>
-              {busy ? '注册中…' : '注册主人 Passkey'}
+            <p>设置<b>管理员密码</b>（登录身份，可以写日记）。</p>
+            <input type="password" placeholder="管理员密码（≥8位）" value={adminPw} onChange={(e) => setAdminPw(e.target.value)} />
+            <input type="password" placeholder="确认管理员密码" value={adminPw2} onChange={(e) => setAdminPw2(e.target.value)} />
+            <button className="primary" disabled={busy || !adminPw || !adminPw2} onClick={setAdminPassword}>
+              {busy ? '保存中…' : '设置并继续'}
             </button>
           </div>
         )}
@@ -240,12 +208,4 @@ export default function Setup({ onDone }) {
       </div>
     </div>
   );
-}
-
-function b64urlToBytes(s) {
-  const b64 = s.replace(/-/g, '+').replace(/_/g, '/');
-  const bin = atob(b64);
-  const b = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) b[i] = bin.charCodeAt(i);
-  return b;
 }

@@ -40,6 +40,37 @@ def me(request: Request, db: Session = Depends(get_db)):
 
 
 # ── 访客读口令登录 → reader session（24h，不续期）─────────
+@router.post("/api/admin/login")
+def admin_login(body: dict, request: Request, db: Session = Depends(get_db)):
+    """管理员密码登录（替代 passkey 登录，密码模式）。
+    校验 credentials 表特殊行的 Argon2id 哈希 → owner 会话（can_write=1）。
+    限流：nginx limit_req（与 /api/session 同 zone 5r/m）。
+    """
+    password = (body.get("password") or "")
+    if not password:
+        raise HTTPException(422, "缺少口令")
+
+    row = db.query(Credential).filter(Credential.cred_id == b"admin-password").first()
+    if not row or not row.password_hash:
+        raise HTTPException(500, "管理员密码未初始化")
+
+    try:
+        ph.verify(str(row.password_hash), password)
+    except VerifyMismatchError:
+        raise HTTPException(403, "口令错误")
+    except Exception:
+        raise HTTPException(500, "口令校验异常")
+
+    token = create_session(
+        db, role="owner", credential_id=b"admin-password", can_write=True,
+        ip=parse_ip(request.client.host if request.client else None),
+        user_agent=request.headers.get("user-agent"),
+    )
+    resp = JSONResponse({"ok": True, "role": "owner", "can_write": True})
+    set_session_cookie(resp, token)
+    return resp
+
+
 @router.post("/api/session")
 def reader_login(body: dict, request: Request, db: Session = Depends(get_db)):
     """读口令校验：crypto_params.role='reader' 的 password_hash。

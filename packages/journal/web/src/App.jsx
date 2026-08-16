@@ -7,7 +7,7 @@ import { api } from './lib/api';
 import './index.css';
 
 function Gate() {
-  const { session, loading, setSession } = useStore();
+  const { session, loading } = useStore();
   const [needSetup, setNeedSetup] = useState(false);
 
   // 判定是否需要初始化（服务端无任何凭据/公钥时）

@@ -4,7 +4,7 @@ import { api } from '../lib/api';
 import { useStore } from '../lib/store';
 
 export default function Login({ onAuthed }) {
-  const { setSession, setSigningKey, setKek } = useStore();
+  const { setSession } = useStore();
   const [tab, setTab] = useState('owner');      // 'owner' | 'reader'
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -53,7 +53,7 @@ export default function Login({ onAuthed }) {
   async function readerLogin() {
     setBusy(true); setError('');
     try {
-      const res = await api.session(password);
+      await api.session(password);
       setSession({ role: 'reader', can_write: false, credential_label: '访客' });
       onAuthed();
     } catch (e) {

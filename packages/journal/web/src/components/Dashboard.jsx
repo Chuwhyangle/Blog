@@ -1,11 +1,11 @@
 /** 主界面：条目列表 + 编辑器（加密写 / 解密读 / 验签） */
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { api } from '../lib/api';
 import { useStore } from '../lib/store';
 import Editor from './Editor';
 import {
-  decryptEntry, verifyPayload, buildSignaturePayload, bytesToHex, b64decode, hexToBytes,
-  deriveKEK, KDF_PARAMS,
+  decryptEntry, verifyPayload, buildSignaturePayload, b64decode, hexToBytes,
+  deriveKEK,
 } from '../lib/crypto';
 
 export default function Dashboard() {
@@ -150,7 +150,7 @@ export default function Dashboard() {
         <Editor
           entry={editing}
           isOwner={isOwner}
-          kek={isOwner ? keys.owner : keys.reader}
+
           signingKey={signingKey}
           onClose={() => setEditing(null)}
           onSaved={() => { setEditing(null); loadEntries(); }}

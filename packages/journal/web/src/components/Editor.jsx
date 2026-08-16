@@ -1,34 +1,23 @@
 /** 编辑器：新建/编辑日记 —— 每次保存换新 DEK+IV、重包封套、重新签名（⑪ 补充①） */
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { api } from '../lib/api';
 import { useStore } from '../lib/store';
-import {
-  encryptEntry, deriveKEK, KDF_PARAMS, bytesToHex,
-} from '../lib/crypto';
+import { encryptEntry } from '../lib/crypto';
 
-export default function Editor({ entry, isOwner, kek, signingKey, onClose, onSaved }) {
-  const { cryptoParams, keys, setKek } = useStore();
+export default function Editor({ entry, isOwner, signingKey, onClose, onSaved }) {
+  const { cryptoParams, keys } = useStore();
   const [title, setTitle] = useState(entry.plain?.title || '');
   const [body, setBody] = useState(entry.plain?.body || '');
   const [tags, setTags] = useState(entry.plain?.tags?.join(', ') || '');
   const [visibility, setVisibility] = useState(entry.visibility || 'private');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
-  const saveTimer = useRef(null);
 
   // 访客只读：不显示编辑控件
   const canSave = isOwner;
 
   // 草稿自动保存（5s 防抖）—— 先加密再落地（⑤ §4）
-  useEffect(() => {
-    if (!canSave || !entry.id) return;   // 只有编辑已有条目时自动保存
-    const t = setTimeout(() => {
-      saveDraft();
-    }, 5000);
-    return () => clearTimeout(t);
-  }, [title, body, tags, visibility]);
-
-  async function saveDraft() {
+  const saveDraft = useCallback(async () => {
     if (!entry.id) return;
     try {
       if (!signingKey || !entry.signing_key_id_bytes) return;   // 无签名能力则不自动存
@@ -46,10 +35,16 @@ export default function Editor({ entry, isOwner, kek, signingKey, onClose, onSav
         signingKeyId: entry.signing_key_id_bytes,
       });
       await api.updateEntry(entry.id, { ...payload, id: entry.id });
-    } catch (e) {
+    } catch {
       // 静默失败，下次手动保存报错
     }
-  }
+  }, [entry.id, entry.signing_key_id_bytes, signingKey, keys.owner, keys.reader, cryptoParams, title, body, tags, visibility]);
+
+  useEffect(() => {
+    if (!canSave || !entry.id) return;   // 只有编辑已有条目时自动保存
+    const t = setTimeout(() => { saveDraft(); }, 5000);
+    return () => clearTimeout(t);
+  }, [title, body, tags, visibility, canSave, entry.id, saveDraft]);
 
   async function save() {
     setBusy(true); setErr('');

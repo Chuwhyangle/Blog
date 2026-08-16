@@ -98,7 +98,7 @@ async function aesGcmDecrypt(keyBytes, ciphertext, iv) {
   try {
     const pt = await crypto.subtle.decrypt({ name: AES, iv }, key, ciphertext);
     return new Uint8Array(pt);
-  } catch (e) {
+  } catch {
     throw new Error('GCM 解密失败（口令错误或数据损坏）');
   }
 }

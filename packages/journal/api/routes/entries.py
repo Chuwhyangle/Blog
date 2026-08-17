@@ -117,6 +117,9 @@ def update_entry(entry_id: str, body: EntryIn, request: Request, db: Session = D
     # + 必须仍指向已登记公钥
     if body.signing_key_id != e.signing_key_id:
         raise HTTPException(422, "signing_key_id 不可变更")
+    # private 不得携带 reader 封套（创建时校验，更新也必须一致，否则残留共享密文）
+    if body.visibility == "private" and (body.dek_reader or body.dek_reader_iv):
+        raise HTTPException(422, "private 条目不得携带 reader 封套")
     e.visibility = body.visibility
     e.updated_at = body.updated_at
     e.ciphertext = body.ciphertext

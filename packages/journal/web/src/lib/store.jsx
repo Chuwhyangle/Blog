@@ -36,12 +36,6 @@ export function StoreProvider({ children }) {
         setSigningKeys(sks);
         if (me.authenticated) {
           setSession(me);
-          // 本人：尝试载入签名密钥（IndexedDB）—— 私钥 + 其 key_id 一起存
-          const sk = await idbGet(KEYS.SIGNING_KEY);
-          if (sk) {
-            setSigningKey(sk.key);
-            if (sk.keyId) setSigningKeyId(new Uint8Array(sk.keyId));
-          }
         }
       } catch (e) {
         console.warn('初始化失败', e);
@@ -50,6 +44,25 @@ export function StoreProvider({ children }) {
       }
     })();
   }, []);
+
+  // 会话建立后才加载签名私钥（启动时未登录会跳过，登录后必须补载——
+  // 否则全新浏览器登录后写日记永远卡「签名密钥未加载」）
+  useEffect(() => {
+    if (!session || session.role !== 'owner' || signingKey) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const sk = await idbGet(KEYS.SIGNING_KEY);
+        if (sk && !cancelled) {
+          setSigningKey(sk.key);
+          if (sk.keyId) setSigningKeyId(new Uint8Array(sk.keyId));
+        }
+      } catch (e) {
+        console.warn('签名密钥加载失败', e);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [session, signingKey]);
 
   const setKek = useCallback((role, kek) => {
     setKeys((k) => ({ ...k, [role]: kek }));

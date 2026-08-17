@@ -111,6 +111,23 @@ async function aesGcmDecrypt(keyBytes, ciphertext, iv) {
   }
 }
 
+export { aesGcmDecrypt };
+
+// ── KEK 校验（verifier 消费闭环 ── ③ crypto_params）────
+// 服务端存的 verifier = AES-GCM('journal-verifier-v1', KEK)。
+// 用途：输错口令时明确报「口令错误」，而不是等第一篇日记
+// 解不开才拿到泛化 GCM 错误（错误定位到密码本身）。
+export const VERIFIER_PLAINTEXT = 'journal-verifier-v1';
+export async function verifyKEK(params, kek) {
+  if (!params?.verifier || !params?.verifier_iv) return true;  // 旧数据回退
+  try {
+    const pt = await aesGcmDecrypt(kek, b64decode(params.verifier), b64decode(params.verifier_iv));
+    return dec.decode(pt) === VERIFIER_PLAINTEXT;
+  } catch {
+    return false;
+  }
+}
+
 // ── UUIDv7（客户端生成，前 48 位毫秒时间戳 ── ⑩ Q3）────
 export function uuidv7Bytes() {
   const now = Date.now();

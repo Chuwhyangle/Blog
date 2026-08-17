@@ -5,7 +5,7 @@ import { useStore } from '../lib/store';
 import Editor from './Editor';
 import {
   decryptEntry, verifyPayload, buildSignaturePayload, b64decode, hexToBytes,
-  deriveKEK,
+  deriveKEK, verifyKEK,
 } from '../lib/crypto';
 
 export default function Dashboard() {
@@ -174,6 +174,9 @@ function UnlockBox({ mode, onDone }) {
       if (!params) throw new Error('服务端未初始化 KDF 参数');
       // 用服务端存的 salt/params 派生（与保存时一致）
       const kek = await deriveKEK(pw, params.salt, params.params);
+      // verifier 校验（③ crypto_params）：马上区分「口令错」与后续数据损坏
+      const ok = await verifyKEK(params, kek);
+      if (!ok) throw new Error('口令错误（verifier 校验未通过）');
       setKek(mode, kek);
       onDone(kek);
     } catch (e) {

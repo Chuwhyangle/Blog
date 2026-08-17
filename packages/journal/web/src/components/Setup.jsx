@@ -10,7 +10,7 @@ import { useStore } from '../lib/store';
 import { idbPut, KEYS } from '../lib/idb';
 import {
   deriveKEK, KDF_PARAMS, RECOVERY_SALT, generateSigningKeyPair, bytesToHex, b64encode, uuidv7Bytes,
-  aesGcmEncrypt,
+  aesGcmEncrypt, verifyKEK,
 } from '../lib/crypto';
 
 export default function Setup({ onDone }) {
@@ -120,6 +120,10 @@ export default function Setup({ onDone }) {
         const params = cryptoParams?.owner;
         if (!params) throw new Error('服务端未初始化 KDF 参数');
         const kek = await deriveKEK(mainPw, params.salt, params.params);
+        // verifier 校验（③ crypto_params）：输错口令直接报错，
+        // 而不是带着错误 KEK 继续走后续步骤
+        const ok = await verifyKEK(params, kek);
+        if (!ok) throw new Error('口令错误（verifier 校验未通过）');
         setKek('owner', kek);
       }
       setStep(2);

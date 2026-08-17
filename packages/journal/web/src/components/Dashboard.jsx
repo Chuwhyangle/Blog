@@ -85,7 +85,8 @@ export default function Dashboard() {
         signing_key_id_bytes: e.signing_key_id ? hexToBytes(e.signing_key_id) : null,
       });
     } catch (err) {
-      alert('解密失败：' + err.message);
+      // 友好提示：直接展示错误信息（aesGcmDecrypt 已改成中文可读描述）
+      alert(err.message || '解密失败');
     }
   }
 

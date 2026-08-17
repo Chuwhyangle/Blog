@@ -110,7 +110,7 @@ async function aesGcmDecrypt(keyBytes, ciphertext, iv) {
     const pt = await crypto.subtle.decrypt({ name: AES, iv }, key, ciphertext);
     return new Uint8Array(pt);
   } catch {
-    throw new Error('GCM 解密失败（口令错误或数据损坏）');
+    throw new Error('解密失败：密钥不匹配或数据已损坏。若刚输入口令，请确认真实口令；若数据在传输中损坏，请联系站长。');
   }
 }
 

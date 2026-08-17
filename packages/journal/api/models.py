@@ -38,6 +38,7 @@ class CryptoParam(Base):
     verifier = Column(LargeBinary(64), nullable=False)
     verifier_iv = Column(LargeBinary(12), nullable=False)
     key_epoch = Column(Integer, nullable=False, default=1)
+    password_hash = Column(String(255), nullable=True)   # 仅 reader 行非空（服务端在线校验）
 
 
 class Credential(Base):

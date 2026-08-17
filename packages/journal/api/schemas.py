@@ -5,9 +5,21 @@ from pydantic import BaseModel, Field
 
 
 # ── 条目 ───────────────────────────────────────────────
+from typing import Optional
+import base64
+from pydantic import BaseModel, Field, field_validator
+
+
+def _b64(v: str) -> bytes:
+    return base64.b64decode(v)
+
+
 class EntryIn(BaseModel):
-    """客户端上传：全是密文/签名/元数据，服务端不解密（⑤ §4）"""
-    id: bytes                    # UUIDv7 原始字节 (16)
+    """客户端上传：全是密文/签名/元数据，服务端不解密（⑤ §4）
+    注意：JSON 传输用字符串（id 为 hex，其余 base64）；
+    模型层统一解码成 bytes —— pydantic 原生 bytes 字段会把 str 按 UTF-8 编码（双重编码 bug）。
+    """
+    id: bytes                    # UUIDv7 原始字节 (16)，传输为 hex 字符串
     visibility: str = Field(pattern="^(private|shared)$")
     created_at: datetime
     updated_at: datetime
@@ -19,6 +31,21 @@ class EntryIn(BaseModel):
     dek_reader_iv: Optional[bytes] = None
     signature: bytes
     signing_key_id: bytes
+
+    @field_validator("id", "signing_key_id", mode="before")
+    @classmethod
+    def _hex_id(cls, v):
+        if isinstance(v, str):
+            return bytes.fromhex(v)
+        return v
+
+    @field_validator("ciphertext", "iv", "dek_owner", "dek_owner_iv",
+                     "dek_reader", "dek_reader_iv", "signature", mode="before")
+    @classmethod
+    def _b64_bytes(cls, v):
+        if isinstance(v, str):
+            return _b64(v)
+        return v
 
 
 class EntryOut(BaseModel):

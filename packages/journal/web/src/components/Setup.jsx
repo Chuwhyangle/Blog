@@ -125,6 +125,7 @@ export default function Setup({ onDone }) {
         wrapped_kek_iv: b64encode(wrappedKekIv),
         wrapped_sk: b64encode(wrappedSk),
         wrapped_sk_iv: b64encode(wrappedSkIv),
+        recovery_code: rec,   // 首次初始化：服务端存 Argon2id 哈希（恢复码换 elevated 会话用）
       });
 
       // 5. 注册签名公钥到服务端

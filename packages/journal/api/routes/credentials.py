@@ -11,7 +11,7 @@ from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
 
 from db import get_db
-from models import Credential, KeyEscrow
+from models import Credential, KeyEscrow, SigningKey
 from security.sessions import (
     require_session, create_session, set_session_cookie, destroy_session, parse_ip,
 )
@@ -126,14 +126,32 @@ def rotate_recovery_code(request: Request, db: Session = Depends(get_db)):
 
 @router.put("/api/auth/recover/escrow")
 def upload_escrow(body: dict, request: Request, db: Session = Depends(get_db)):
-    """elevated 会话内：上传 Enc(KEK_recovery, KEK_owner) 与 Enc(KEK_recovery, sk)
-    （⑩ Q1b：wrapped_sk 用恢复码盘出的 KEK_recovery 加密的 pkcs8 私钥）
+    """上传 Enc(KEK_recovery, KEK_owner) 与 Enc(KEK_recovery, sk)（⑩ Q1b）。
+    权限：elevated（恢复流程）或 owner bootstrap（首次初始化，signing_keys 空时）。
+    bootstrap 时需携带 recovery_code（明文，一次性）→ 服务端 Argon2id 哈希存 code_hash。
     """
-    sess = require_session(db, request, roles={"elevated"})
+    sess = require_session(db, request)
+    bootstrap = db.query(SigningKey).count() == 0
+    if sess.role == "owner" and not bootstrap:
+        raise HTTPException(403, "仅初始化或恢复流程可上传 escrow")
 
     row = db.query(KeyEscrow).filter(KeyEscrow.purpose == "recovery").first()
     if not row:
-        raise HTTPException(404, "escrow 未初始化，请先 rotate")
+        if not bootstrap:
+            raise HTTPException(404, "escrow 未初始化，请先 rotate")
+        row = KeyEscrow(
+            purpose="recovery",
+            code_hash=b"",
+            created_at=datetime.now(timezone.utc),
+        )
+        db.add(row)
+
+    # bootstrap：前端把恢复码（明文）交给服务端存 Argon2id 哈希（恢复校验用）
+    code = (body.get("recovery_code") or "").strip()
+    if bootstrap:
+        if len(code) < 20:
+            raise HTTPException(422, "bootstrap 需提供 recovery_code")
+        row.code_hash = ph.hash(code).encode()
 
     row.wrapped_kek = base64.b64decode(body["wrapped_kek"])
     row.wrapped_kek_iv = base64.b64decode(body["wrapped_kek_iv"])

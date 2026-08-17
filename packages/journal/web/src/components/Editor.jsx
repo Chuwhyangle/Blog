@@ -2,16 +2,17 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '../lib/api';
 import { useStore } from '../lib/store';
-import { encryptEntry } from '../lib/crypto';
+import { encryptEntry, deriveKEK } from '../lib/crypto';
 
 export default function Editor({ entry, isOwner, signingKey, onClose, onSaved }) {
-  const { cryptoParams, keys } = useStore();
+  const { cryptoParams, keys, setKek } = useStore();
   const [title, setTitle] = useState(entry.plain?.title || '');
   const [body, setBody] = useState(entry.plain?.body || '');
   const [tags, setTags] = useState(entry.plain?.tags?.join(', ') || '');
   const [visibility, setVisibility] = useState(entry.visibility || 'private');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
+  const [readerPw, setReaderPw] = useState('');   // shared 解锁读口令（内联入口）
 
   // 访客只读：不显示编辑控件
   const canSave = isOwner;
@@ -57,10 +58,16 @@ export default function Editor({ entry, isOwner, signingKey, onClose, onSaved })
       if (!kekOwner) throw new Error('请先解锁主口令');
       const ownerParams = cryptoParams?.owner;
       if (!ownerParams) throw new Error('未初始化 crypto 参数');
-      const readerKek = keys.reader;
-      // 若是 shared 但没有 reader KEK，需要先输读口令（个人场景作者通常已解）
+      let readerKek = keys.reader;
+      // 若是 shared 但没有 reader KEK：先必须解锁读口令（否则无法生成 reader 封套）
       if (visibility === 'shared' && !readerKek) {
-        throw new Error('共享条目需要读口令（先解锁读口令）');
+        if (!readerPw) {
+          throw new Error('共享条目需要读口令：请在下方输入读口令解锁');
+        }
+        const rp = cryptoParams?.reader;
+        if (!rp) throw new Error('未初始化读口令参数');
+        readerKek = await deriveKEK(readerPw, rp.salt, rp.params);
+        setKek('reader', readerKek);   // 记住，避免每次保存重复派生
       }
 
       const payload = await encryptEntry({
@@ -133,6 +140,17 @@ export default function Editor({ entry, isOwner, signingKey, onClose, onSaved })
         disabled={!canSave}
         onChange={(e) => setTags(e.target.value)}
       />
+      {canSave && visibility === 'shared' && !keys.reader && (
+        <div className="hint-box">
+          <p className="hint">🔓 共享条目需要读口令才能生成访客封套：</p>
+          <input
+            type="password"
+            placeholder="读口令"
+            value={readerPw}
+            onChange={(e) => setReaderPw(e.target.value)}
+          />
+        </div>
+      )}
       {err && <p className="error">{err}</p>}
       <div className="editor-actions">
         {canSave && <button className="primary" disabled={busy} onClick={save}>{busy ? '加密保存中…' : '💾 保存'}</button>}

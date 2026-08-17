@@ -60,6 +60,8 @@ export function StoreProvider({ children }) {
     setKeys({ owner: null, reader: null });
     setSigningKey(null);
     setSigningKeyId(null);
+    // 服务端同步销毁会话（token 即时失效，而不是等过期）
+    api.logout().catch(() => {});
   }, []);
 
   const value = useMemo(() => ({

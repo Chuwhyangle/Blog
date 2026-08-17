@@ -39,6 +39,7 @@ export const api = {
   session: (password) => request('POST', '/session', { password }),
   adminLogin: (password) => request('POST', '/admin/login', { password }),
   setupAdminPassword: (password) => request('POST', '/setup/admin-password', { password }),
+  setupStatus: () => request('GET', '/setup/status'),
   logout: () => request('POST', '/logout'),
 
   // WebAuthn

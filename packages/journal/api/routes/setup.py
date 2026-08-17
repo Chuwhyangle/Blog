@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 from argon2 import PasswordHasher
 
 from db import get_db
-from models import Credential, CryptoParam, SigningKey
+from models import Credential, CryptoParam, SigningKey, KeyEscrow
 from security.sessions import require_session, create_session, set_session_cookie, parse_ip
 
 router = APIRouter(prefix="/api/setup", tags=["setup"])
@@ -32,10 +32,22 @@ def _ensure_bootstrap(db: Session) -> None:
         raise HTTPException(403, "已初始化，请使用恢复流程注册新凭据")
 
 
+@router.get("/status")
+def setup_status(db: Session = Depends(get_db)):
+    """初始化进度（向导断点续走用）：半初始化状态刷新后定位到未完成步骤。"""
+    return {
+        "admin_password_set": db.query(Credential).filter(Credential.cred_id == b"admin-password").count() > 0,
+        "crypto_params_set": db.query(CryptoParam).count() >= 2,
+        "signing_key_set": db.query(SigningKey).count() > 0,
+        "escrow_set": db.query(KeyEscrow).count() > 0,
+    }
+
+
 @router.post("/admin-password")
 def setup_admin_password(body: dict, request: Request, db: Session = Depends(get_db)):
     """设置管理员密码（登录身份，替代 passkey 注册）。
     bootstrap：signing_keys 空时允许；成功后直接建立 owner 会话（设置向导后续步骤需要）。
+    幂等：若已设置（半初始化重入），不覆盖密码，直接返回 ok + 会话。
     管理员密码 Argon2id 哈希存 credentials 表特殊行（cred_id=b'admin-password'）。
     """
     _ensure_bootstrap(db)
@@ -44,18 +56,17 @@ def setup_admin_password(body: dict, request: Request, db: Session = Depends(get
         raise HTTPException(422, "管理员密码至少 8 位")
 
     row = db.query(Credential).filter(Credential.cred_id == b"admin-password").first()
-    if row:
-        raise HTTPException(403, "管理员密码已设置")
-    db.add(Credential(
-        cred_id=b"admin-password",
-        public_key=b"",
-        sign_count=0,
-        can_write=True,
-        label="管理员密码登录",
-        password_hash=ph.hash(password),
-        created_at=datetime.now(timezone.utc),
-    ))
-    db.commit()
+    if not row:
+        db.add(Credential(
+            cred_id=b"admin-password",
+            public_key=b"",
+            sign_count=0,
+            can_write=True,
+            label="管理员密码登录",
+            password_hash=ph.hash(password),
+            created_at=datetime.now(timezone.utc),
+        ))
+        db.commit()
 
     token = create_session(
         db, role="owner", credential_id=b"admin-password", can_write=True,

@@ -4,7 +4,7 @@
  *  3. 生成签名密钥对 → 托管（恢复码加密后上传）→ 本地存不可导出副本
  *  4. 生成恢复码 → 物理保存确认
  */
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
 import { useStore } from '../lib/store';
 import { idbPut, KEYS } from '../lib/idb';
@@ -14,8 +14,8 @@ import {
 } from '../lib/crypto';
 
 export default function Setup({ onDone }) {
-  const { setSession, setKek, setSigningKey, setSigningKeyId, keys } = useStore();
-  const [step, setStep] = useState(0);           // 0 管理员密码 → 1 口令 → 2 恢复码
+  const { setSession, setKek, setSigningKey, setSigningKeyId, keys, cryptoParams } = useStore();
+  const [step, setStep] = useState(null);        // null=正在探测进度；0 管理员密码 → 1 口令 → 2 恢复码
   const [adminPw, setAdminPw] = useState('');
   const [adminPw2, setAdminPw2] = useState('');
   const [mainPw, setMainPw] = useState('');
@@ -25,6 +25,22 @@ export default function Setup({ onDone }) {
   const [recSaved, setRecSaved] = useState(false);
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
+
+  // 断点续走：探测已完成的步骤，直接从下一步开始（半初始化刷新不丢进度）
+  useEffect(() => {
+    (async () => {
+      try {
+        const s = await api.setupStatus();
+        if (s.signing_key_set) { onDone(); return; }          // 已完整初始化（理论走不到这里）
+        if (s.crypto_params_set) setStep(1);                  // 口令已设 → 解锁（或重设）后进密钥步骤
+        else if (s.admin_password_set) setStep(1);            // 密码已设 → 口令
+        else setStep(0);
+      } catch {
+        setStep(0);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ── Step 0：设置管理员密码（服务端 Argon2id 哈希，建 owner 会话）──
   async function setAdminPassword() {
@@ -85,6 +101,24 @@ export default function Setup({ onDone }) {
       if (!res.ok) {
         const j = await res.json().catch(() => ({}));
         throw new Error(j.detail || '口令保存失败');
+      }
+      setStep(2);
+    } catch (e) {
+      setErr(e.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // ── Step 1（半初始化续走）：口令已设 → 输主口令派生 KEK（内存）──
+  async function unlockKeys() {
+    setBusy(true); setErr('');
+    try {
+      if (!keys.owner) {
+        const params = cryptoParams?.owner;
+        if (!params) throw new Error('服务端未初始化 KDF 参数');
+        const kek = await deriveKEK(mainPw, params.salt, params.params);
+        setKek('owner', kek);
       }
       setStep(2);
     } catch (e) {
@@ -158,6 +192,9 @@ export default function Setup({ onDone }) {
     <div className="setup-wrap">
       <div className="setup-card">
         <h1>📔 首次设置</h1>
+        {step === null && <p className="hint">正在检查初始化进度…</p>}
+        {step !== null && (
+        <>
         <div className="steps">
           <span className={step >= 0 ? 'done' : ''}>1 管理员密码</span>
           <span className={step >= 1 ? 'done' : ''}>2 口令</span>
@@ -177,11 +214,21 @@ export default function Setup({ onDone }) {
 
         {step === 1 && (
           <div>
-            <p>设置主口令（本人解锁私人条目）与读口令（访客读共享条目）。</p>
-            <input type="password" placeholder="主口令（≥8位）" value={mainPw} onChange={(e) => setMainPw(e.target.value)} />
-            <input type="password" placeholder="确认主口令" value={mainPw2} onChange={(e) => setMainPw2(e.target.value)} />
-            <input type="password" placeholder="访客读口令（≥8位）" value={readerPw} onChange={(e) => setReaderPw(e.target.value)} />
-            <button className="primary" disabled={busy} onClick={setPasswords}>{busy ? '保存中…' : '保存口令'}</button>
+            {cryptoAlreadySet ? (
+              <>
+                <p>口令已设置。输入<b>主口令</b>解锁加密密钥（仅存内存）。</p>
+                <input type="password" placeholder="主口令" value={mainPw} autoFocus onChange={(e) => setMainPw(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && unlockKeys()} />
+                <button className="primary" disabled={busy || !mainPw} onClick={unlockKeys}>{busy ? '解锁中…' : '解锁并继续'}</button>
+              </>
+            ) : (
+              <>
+                <p>设置主口令（本人解锁私人条目）与读口令（访客读共享条目）。</p>
+                <input type="password" placeholder="主口令（≥8位）" value={mainPw} onChange={(e) => setMainPw(e.target.value)} />
+                <input type="password" placeholder="确认主口令" value={mainPw2} onChange={(e) => setMainPw2(e.target.value)} />
+                <input type="password" placeholder="访客读口令（≥8位）" value={readerPw} onChange={(e) => setReaderPw(e.target.value)} />
+                <button className="primary" disabled={busy} onClick={setPasswords}>{busy ? '保存中…' : '保存口令'}</button>
+              </>
+            )}
           </div>
         )}
 
@@ -206,6 +253,8 @@ export default function Setup({ onDone }) {
         )}
 
         {err && <p className="error">{err}</p>}
+        </>
+        )}
       </div>
     </div>
   );

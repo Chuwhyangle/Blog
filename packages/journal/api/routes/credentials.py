@@ -160,7 +160,12 @@ def upload_escrow(body: dict, request: Request, db: Session = Depends(get_db)):
     """
     sess = require_session(db, request)
     bootstrap = db.query(SigningKey).count() == 0
-    if sess.role == "owner" and not bootstrap:
+    # 角色白名单：只有两种合法路径
+    # 1) 首次初始化（bootstrap）：owner 会话 + signing_keys 空
+    # 2) 恢复流程：elevated 会话（未唯一初始化的角色）
+    # 其他（reader/owner+非 bootstrap）一律 403；
+    # 修复：旧代码 reader 会话也能走到这里覆盖 escrow（头泄露 + 破坏恢复）
+    if not (sess.role == "owner" and bootstrap) and sess.role != "elevated":
         raise HTTPException(403, "仅初始化或恢复流程可上传 escrow")
 
     row = db.query(KeyEscrow).filter(KeyEscrow.purpose == "recovery").first()
@@ -192,9 +197,13 @@ def upload_escrow(body: dict, request: Request, db: Session = Depends(get_db)):
 
 @router.get("/api/auth/recover/escrow")
 def get_escrow(request: Request, db: Session = Depends(get_db)):
-    """本人（owner 会话）下载托管材料：解锁用恢复码包好的 KEK_owner 与私钥。"""
+    """托管材料下载：仅 elevated 会话（10 分钟恢复流程）或首次初始化 owner。
+    收紧理由：任意 30 天 owner 会话都能拿到 wrapped_sk/wrapped_kek，
+    XSS/浏览器劫持直接泄露全部托管材料——与设计意图「恢复流程专用」不符。
+    """
     sess = require_session(db, request)
-    if sess.role not in ("owner", "elevated"):
+    bootstrap = db.query(SigningKey).count() == 0
+    if not (sess.role == "elevated" or (sess.role == "owner" and bootstrap)):
         raise HTTPException(403)
     row = db.query(KeyEscrow).filter(KeyEscrow.purpose == "recovery").first()
     if not row:

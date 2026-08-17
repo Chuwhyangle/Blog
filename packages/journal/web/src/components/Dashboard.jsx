@@ -11,11 +11,11 @@ import {
 
 export default function Dashboard() {
   const { session, clearSession, keys, setKek, signingKeys, signingKey, signingKeyId } = useStore();
-  const [entries, setEntries] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [entries, setEntries] = useState([]);  const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(null);       // 正在编辑的条目（含解密后的明文）
   const [writeKey, setWriteKey] = useState(false);    // 是否需要输主口令（作者写）
   const [rotateOpen, setRotateOpen] = useState(false);
+  const [pendingEntry, setPendingEntry] = useState(null);   // 解锁后自动打开的目标条目
   const [verificationWarnings, setVerificationWarnings] = useState([]);
 
   const isOwner = session?.role === 'owner';
@@ -67,11 +67,12 @@ export default function Dashboard() {
 
   useEffect(() => { loadEntries(); }, [loadEntries]);
 
-  // ── 解密打开编辑器 ──
-  async function openEntry(e) {
+  // ── 解密打开编辑器（kekOverride：解锁回调里直接用刚派生的 KEK，避开异步状态）──
+  async function openEntry(e, kekOverride) {
     // 访客：reader KEK；本人：owner KEK
-    const kek = isOwner ? keys.owner : keys.reader;
+    const kek = kekOverride || (isOwner ? keys.owner : keys.reader);
     if (!kek) {
+      setPendingEntry(e);
       setWriteKey(true);   // 需要先解锁（输口令派生 KEK）
       return;
     }
@@ -124,10 +125,17 @@ export default function Dashboard() {
       )}
 
       {writeKey && !isOwner && (
-        <UnlockBox mode="reader" onDone={(kek) => { setKek('reader', kek); setWriteKey(false); }} />
+        <UnlockBox mode="reader" onDone={(kek) => {
+          setKek('reader', kek); setWriteKey(false);
+          // 解锁成功 → 用刚派生的 KEK 直接打开之前想看的条目
+          if (pendingEntry) { const t = pendingEntry; setPendingEntry(null); openEntry(t, kek); }
+        }} />
       )}
       {writeKey && isOwner && (
-        <UnlockBox mode="owner" onDone={(kek) => { setKek('owner', kek); setWriteKey(false); }} />
+        <UnlockBox mode="owner" onDone={(kek) => {
+          setKek('owner', kek); setWriteKey(false);
+          if (pendingEntry) { const t = pendingEntry; setPendingEntry(null); openEntry(t, kek); }
+        }} />
       )}
 
       {loading ? (

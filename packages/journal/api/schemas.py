@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 # ── 条目 ───────────────────────────────────────────────
 from typing import Optional
 import base64
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, field_serializer
 
 
 def _b64(v: str) -> bytes:
@@ -66,8 +66,17 @@ class EntryOut(BaseModel):
     owner_epoch: int = 1
     reader_epoch: int = 0
 
+    @field_serializer("ciphertext", "iv", "dek_owner", "dek_owner_iv",
+                       "dek_reader", "dek_reader_iv", "signature")
+    @classmethod
+    def _b64_out(cls, v):
+        # bytes 字段默认按 UTF-8 序列化，非 UTF-8 字节直接抛
+        # PydanticSerializationError → 明确转 base64
+        if v is None:
+            return None
+        return base64.b64encode(v).decode()
 
-# ── 会话 ───────────────────────────────────────────────
+
 class SessionOut(BaseModel):
     role: str
     can_write: bool

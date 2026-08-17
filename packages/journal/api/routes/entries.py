@@ -41,9 +41,13 @@ def _can_write(db: Session, cred_id: bytes) -> bool:
     return bool(cred and cred.can_write)
 
 
-@router.get("")
+@router.get("", response_model=list[EntryOut])
 def list_entries(request: Request, db: Session = Depends(get_db)):
-    """GET：按 session 角色过滤（③ §4 纵深防御）"""
+    """GET：按 session 角色过滤（③ §4 纵深防御）
+    response_model 必需：bytes 字段经 jsonable_encoder 会把非 UTF-8 字节强解 UTF-8
+    → UnicodeDecodeError 500（密文几乎必然含 ≥0x80 字节）。
+    EntryOut 有 pydantic 序列化器，见 schemas.py 校验器。
+    """
     sess = require_session(db, request)
     q = (
         db.query(Entry)
@@ -53,7 +57,7 @@ def list_entries(request: Request, db: Session = Depends(get_db)):
     return [_to_out(e) for e in q.all()]
 
 
-@router.post("", status_code=201)
+@router.post("", status_code=201, response_model=EntryOut)
 def create_entry(body: EntryIn, request: Request, db: Session = Depends(get_db)):
     """POST：必须 session + can_write（服务端强制写权限）"""
     sess = require_session(db, request, roles={"owner"})
@@ -97,7 +101,7 @@ def create_entry(body: EntryIn, request: Request, db: Session = Depends(get_db))
     return _to_out(entry)
 
 
-@router.put("/{entry_id}")
+@router.put("/{entry_id}", response_model=EntryOut)
 def update_entry(entry_id: str, body: EntryIn, request: Request, db: Session = Depends(get_db)):
     """PUT：更新（换 DEK+IV、重包封套后上传；id/created_at/signing_key_id 不可变）"""
     sess = require_session(db, request, roles={"owner"})

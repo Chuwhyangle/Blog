@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { api } from '../lib/api';
 import { useStore } from '../lib/store';
 
-export default function Login({ onAuthed }) {
+export default function Login({ onAuthed, onSetupClick }) {
   const { setSession } = useStore();
   const [tab, setTab] = useState('owner');      // 'owner' | 'reader'
   const [password, setPassword] = useState('');
@@ -41,6 +41,9 @@ export default function Login({ onAuthed }) {
   return (
     <div className="login-wrap">
       <div className="login-card">
+        <div className="login-top">
+          <button className="ghost setup-btn" onClick={onSetupClick}>⚙️ 首次设置</button>
+        </div>
         <h1>📔 Journal</h1>
         <p className="sub">私人加密日记</p>
 

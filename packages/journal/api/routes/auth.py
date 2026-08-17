@@ -2,6 +2,7 @@
 import base64
 import json
 import uuid
+from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
@@ -47,7 +48,8 @@ def me(request: Request, db: Session = Depends(get_db)):
 def admin_login(body: dict, request: Request, db: Session = Depends(get_db)):
     """管理员密码登录（替代 passkey 登录，密码模式）。
     校验 credentials 表特殊行的 Argon2id 哈希 → owner 会话（can_write=1）。
-    限流：nginx limit_req（与 /api/session 同 zone 5r/m）。
+    限流：nginx limit_req（与 /api/session 同 zone 5r/m）；
+          应用层：10 次失败 → 账号级冻结 30min（改 IP 也无法绕过）。
     """
     password = (body.get("password") or "")
     if not password:
@@ -57,12 +59,25 @@ def admin_login(body: dict, request: Request, db: Session = Depends(get_db)):
     if not row or not row.password_hash:
         raise HTTPException(500, "管理员密码未初始化")
 
+    now = datetime.now(timezone.utc)
+    if row.frozen_until and row.frozen_until > now:
+        raise HTTPException(429, "账号已冻结，请稍后再试")
+
     try:
         ph.verify(str(row.password_hash), password)
     except VerifyMismatchError:
+        row.failed_count = (row.failed_count or 0) + 1
+        if row.failed_count >= 10:
+            row.frozen_until = now + timedelta(minutes=30)
+        db.commit()
         raise HTTPException(403, "口令错误")
     except Exception:
         raise HTTPException(500, "口令校验异常")
+
+    # 成功：清零失败计数/冻结
+    row.failed_count = 0
+    row.frozen_until = None
+    db.commit()
 
     token = create_session(
         db, role="owner", credential_id=b"admin-password", can_write=True,

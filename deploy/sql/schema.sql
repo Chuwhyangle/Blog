@@ -63,6 +63,8 @@ CREATE TABLE credentials (
   can_write   TINYINT(1)      NOT NULL DEFAULT 0,  -- 写权限的唯一判据（⑤ §6）
   label       VARCHAR(64)     NULL,
   password_hash VARCHAR(255)  NULL,                -- 管理员密码 Argon2id 哈希（密码登录模式）
+  failed_count INT UNSIGNED   NOT NULL DEFAULT 0,  -- 密码失败计数（账号级锁）
+  frozen_until DATETIME(3)    NULL,                -- 冻结截止时间
   created_at  DATETIME(3)     NOT NULL,
   PRIMARY KEY (cred_id)
 ) ENGINE=InnoDB ROW_FORMAT=DYNAMIC;

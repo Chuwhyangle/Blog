@@ -54,6 +54,8 @@ class Credential(Base):
     label = Column(String(64), nullable=True)
     password_hash = Column(String(255), nullable=True)   # 管理员密码登录模式用
     created_at = Column(DateTime(3), nullable=False)
+    failed_count = Column(Integer, nullable=False, default=0)   # 密码失败计数（账号级锁）
+    frozen_until = Column(DateTime(3), nullable=True)            # 冻结截止时间
 
 
 class SigningKey(Base):

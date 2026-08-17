@@ -92,7 +92,8 @@ def admin_login(body: dict, request: Request, db: Session = Depends(get_db)):
 @router.post("/api/session")
 def reader_login(body: dict, request: Request, db: Session = Depends(get_db)):
     """读口令校验：crypto_params.role='reader' 的 password_hash。
-    限流：nginx limit_req（/api/session 5r/m）。
+    限流：nginx limit_req（/api/session 5r/m）；
+          应用层：10 次失败 → 账号级冻结 30min。
     """
     password = (body.get("password") or "").strip()
     if not password:
@@ -102,12 +103,25 @@ def reader_login(body: dict, request: Request, db: Session = Depends(get_db)):
     if not row or not row.password_hash:
         raise HTTPException(500, "读口令未初始化")
 
+    now = datetime.now(timezone.utc)
+    if row.frozen_until and row.frozen_until > now:
+        raise HTTPException(429, "访客登录已冻结，请稍后再试")
+
     try:
         ph.verify(str(row.password_hash), password)
     except VerifyMismatchError:
+        row.failed_count = (row.failed_count or 0) + 1
+        if row.failed_count >= 10:
+            row.frozen_until = now + timedelta(minutes=30)
+        db.commit()
         raise HTTPException(403, "口令错误")
     except Exception:
         raise HTTPException(500, "口令校验异常")
+
+    # 成功：清零失败计数/冻结
+    row.failed_count = 0
+    row.frozen_until = None
+    db.commit()
 
     token = create_session(
         db, role="reader", can_write=False,

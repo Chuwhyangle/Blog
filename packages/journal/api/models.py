@@ -39,6 +39,8 @@ class CryptoParam(Base):
     verifier_iv = Column(LargeBinary(12), nullable=False)
     key_epoch = Column(Integer, nullable=False, default=1)
     password_hash = Column(String(255), nullable=True)   # 仅 reader 行非空（服务端在线校验）
+    failed_count = Column(Integer, nullable=False, default=0)   # 读口令失败计数（账号级锁）
+    frozen_until = Column(DateTime(3), nullable=True)            # 冻结截止时间
 
 
 class Credential(Base):

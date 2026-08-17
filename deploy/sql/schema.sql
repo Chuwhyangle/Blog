@@ -52,6 +52,8 @@ CREATE TABLE crypto_params (
   -- 服务端在线校验用（仅 reader 行非空）：Argon2id 标准编码串（$argon2id$...），
   -- 独立于前端派生 KEK 的 salt/params —— 若同盐同参，服务端拿到 hash 就等于拿到 KEK_reader。
   password_hash VARCHAR(255) NULL,
+  failed_count  INT UNSIGNED   NOT NULL DEFAULT 0,  -- 读口令失败计数（账号级锁）
+  frozen_until  DATETIME(3)    NULL,                -- 冻结截止时间
   PRIMARY KEY (role)
 ) ENGINE=InnoDB ROW_FORMAT=DYNAMIC;
 

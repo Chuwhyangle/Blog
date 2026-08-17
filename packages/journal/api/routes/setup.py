@@ -93,29 +93,28 @@ def setup_passwords(body: dict, request: Request, db: Session = Depends(get_db))
         if db.query(CryptoParam).filter(CryptoParam.role == role).count() > 0:
             raise HTTPException(409, f"{role} 参数已初始化，不能覆盖")
 
+    # owner+reader 必须同一事务原子写入：任一失败全部回滚，
+    # 避免半初始化单行状态卡死向导（探测阈值是 ≥2 行）。
     def _save(role: str, data: dict, with_password: bool = False) -> None:
         salt = base64.b64decode(data["salt"])
         params = json.dumps(data["params"])
         verifier = base64.b64decode(data["verifier"])
         verifier_iv = base64.b64decode(data["verifier_iv"])
-        row = db.query(CryptoParam).filter(CryptoParam.role == role).first()
-        if row:
-            row.salt = salt; row.params = params
-            row.verifier = verifier; row.verifier_iv = verifier_iv
-            if with_password and data.get("password"):
-                row.password_hash = ph.hash(data["password"])
-        else:
-            db.add(CryptoParam(
-                role=role, salt=salt, params=params,
-                verifier=verifier, verifier_iv=verifier_iv,
-                password_hash=ph.hash(data["password"]) if (with_password and data.get("password")) else None,
-                key_epoch=1,
-                algo="argon2id",
-            ))
-        db.commit()
+        db.add(CryptoParam(
+            role=role, salt=salt, params=params,
+            verifier=verifier, verifier_iv=verifier_iv,
+            password_hash=ph.hash(data["password"]) if (with_password and data.get("password")) else None,
+            key_epoch=1,
+            algo="argon2id",
+        ))
 
-    _save("owner", owner)
-    _save("reader", reader, with_password=True)
+    try:
+        _save("owner", owner)
+        _save("reader", reader, with_password=True)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
     return {"ok": True}
 
 

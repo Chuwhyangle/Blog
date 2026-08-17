@@ -57,8 +57,11 @@ export function bytesToHex(buf) {
   return [...new Uint8Array(buf)].map((x) => x.toString(16).padStart(2, '0')).join('');
 }
 export function hexToBytes(hex) {
-  const b = new Uint8Array(hex.length / 2);
-  for (let i = 0; i < b.length; i++) b[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+  // 兼容带连字符的 UUID 字符串（服务端返回 str(uuid.UUID(...)) 即带连字符）；
+  // 纯 hex（来自前端 bytesToHex）不受影响。
+  const clean = String(hex).replace(/-/g, '');
+  const b = new Uint8Array(clean.length / 2);
+  for (let i = 0; i < b.length; i++) b[i] = parseInt(clean.slice(i * 2, i * 2 + 2), 16);
   return b;
 }
 

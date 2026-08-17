@@ -2,7 +2,7 @@
 import base64
 import secrets
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
@@ -22,6 +22,15 @@ router = APIRouter(tags=["credentials"])
 ph = PasswordHasher(
     time_cost=2, memory_cost=32 * 1024, parallelism=1,   # 恢复码 75bit 熵，降档可接受（⑪ Q5）
 )
+
+
+def _as_dt(v):
+    """SQLite/MySQL 方言归一化：str → aware datetime（与 sessions.py 同逻辑）"""
+    if isinstance(v, str):
+        return datetime.fromisoformat(v.replace('Z', '+00:00'))
+    if v.tzinfo is None:
+        return v.replace(tzinfo=timezone.utc)
+    return v
 
 
 # ── 列出凭据（供人工吊销）─────────────────────────────
@@ -64,27 +73,42 @@ def delete_credential(cred_id_b64: str, request: Request, db: Session = Depends(
 def recover(body: dict, request: Request, db: Session = Depends(get_db)):
     """恢复码换取 10 分钟 elevated 会话（⑩ Q1a）。
     限流：nginx limit_req 5 次/小时/IP（配置文件里）；
-          应用层再叠加：同小时 10 次失败 → 全局冻结 24h。
+          应用层：同小时 10 次失败 → 全局冻结 24h（⑪ Q6）。
     """
     code = (body.get("code") or "").strip()
     if not code:
         raise HTTPException(422, "缺少恢复码")
 
-    # 应用层冻结：key_escrow 行 used_at 存在 & 最近失败计数（简化：用内存计数）
     row = db.query(KeyEscrow).filter(KeyEscrow.purpose == "recovery").first()
-    if not row or row.used_at:
-        raise HTTPException(403, "恢复码已作废或未初始化")
+    if not row:
+        raise HTTPException(403, "恢复码未初始化")
+
+    now = datetime.now(timezone.utc)
+
+    # 应用层冻结：成功用过 → 作废；失败过多 → 冻结 24h
+    if row.used_at:
+        raise HTTPException(403, "恢复码已作废")
+    if row.frozen_until and _as_dt(row.frozen_until) > now:
+        raise HTTPException(429, "恢复尝试过于频繁，已冻结 24 小时")
 
     # 校验 code_hash（Argon2id(恢复码)）
     try:
         ph.verify(bytes(row.code_hash).decode(), code)
     except VerifyMismatchError:
+        row.failed_count = (row.failed_count or 0) + 1
+        if row.failed_count >= 10:
+            row.frozen_until = now + timedelta(hours=24)
+            db.commit()
+            raise HTTPException(429, "失败次数过多，恢复功能冻结 24 小时")
+        db.commit()
         raise HTTPException(403, "恢复码错误")
     except Exception:
         raise HTTPException(500, "恢复码校验异常")
 
-    # 成功：作废旧码（等价于一次性）+ 创建 elevated 会话
-    row.used_at = datetime.now(timezone.utc)
+    # 成功：清除失败计数 + 作废旧码（一次性）+ 创建 elevated 会话
+    row.failed_count = 0
+    row.frozen_until = None
+    row.used_at = now
     db.commit()
 
     token = create_session(

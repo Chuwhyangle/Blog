@@ -76,7 +76,9 @@ CREATE TABLE key_escrow (
   wrapped_sk    VARBINARY(128) NULL,                 -- Enc(KEK_recovery, pkcs8 私钥)
   wrapped_sk_iv VARBINARY(12)  NULL,
   created_at    DATETIME(3)    NOT NULL,
-  used_at       DATETIME(3)    NULL                  -- 用过即作废
+  used_at       DATETIME(3)    NULL,                 -- 用过即作废
+  failed_count  INT UNSIGNED   NOT NULL DEFAULT 0,   -- 失败计数（应用层冻结）
+  frozen_until  DATETIME(3)    NULL                  -- 冻结截止时间
 ) ENGINE=InnoDB;
 
 -- ── 会话（服务端表，主键存 SHA-256(token)）──────────────────

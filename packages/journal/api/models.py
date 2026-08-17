@@ -79,6 +79,8 @@ class KeyEscrow(Base):
     wrapped_sk_iv = Column(LargeBinary(12), nullable=True)
     created_at = Column(DateTime(3), nullable=False)
     used_at = Column(DateTime(3), nullable=True)
+    failed_count = Column(Integer, nullable=False, default=0)      # 失败计数（⑪ Q6 应用层冻结）
+    frozen_until = Column(DateTime(3), nullable=True)              # 全局冻结截止时间
 
 
 class SessionRow(Base):

@@ -27,7 +27,8 @@ ph = PasswordHasher(
 # ── 列出凭据（供人工吊销）─────────────────────────────
 @router.get("/api/credentials")
 def list_credentials(request: Request, db: Session = Depends(get_db)):
-    sess = require_session(db, request)
+    """凭据管理仅限 owner/edit 会话（访客不得到达此端点）"""
+    sess = require_session(db, request, roles={"owner", "elevated"})
     rows = db.query(Credential).all()
     return [
         {
@@ -42,11 +43,14 @@ def list_credentials(request: Request, db: Session = Depends(get_db)):
 
 @router.delete("/api/credentials/{cred_id_b64}")
 def delete_credential(cred_id_b64: str, request: Request, db: Session = Depends(get_db)):
-    sess = require_session(db, request)
+    """删除凭据：仅 owner（且不允许删掉自己当前登录用的管理与凭据本身）"""
+    sess = require_session(db, request, roles={"owner", "elevated"})
     try:
         raw_id = base64.b64decode(cred_id_b64)
     except Exception:
         raise HTTPException(422, "invalid credential id")
+    if raw_id == b"admin-password":
+        raise HTTPException(403, "管理员密码凭据不可删除（改密需走恢复流程）")
     row = db.query(Credential).filter(Credential.cred_id == raw_id).first()
     if not row:
         raise HTTPException(404)

@@ -31,6 +31,8 @@ class EntryIn(BaseModel):
     dek_reader_iv: Optional[bytes] = None
     signature: bytes
     signing_key_id: bytes
+    owner_epoch: int = 1
+    reader_epoch: int = 0
 
     @field_validator("id", "signing_key_id", mode="before")
     @classmethod
@@ -61,6 +63,8 @@ class EntryOut(BaseModel):
     dek_reader_iv: Optional[bytes] = None
     signature: bytes
     signing_key_id: str
+    owner_epoch: int = 1
+    reader_epoch: int = 0
 
 
 # ── 会话 ───────────────────────────────────────────────

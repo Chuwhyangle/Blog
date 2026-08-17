@@ -30,6 +30,8 @@ def _to_out(e: Entry) -> EntryOut:
         dek_reader_iv=e.dek_reader_iv,
         signature=e.signature,
         signing_key_id=str(uuid.UUID(bytes=e.signing_key_id)),
+        owner_epoch=e.owner_epoch,
+        reader_epoch=e.reader_epoch,
     )
 
 
@@ -87,8 +89,8 @@ def create_entry(body: EntryIn, request: Request, db: Session = Depends(get_db))
         dek_reader_iv=body.dek_reader_iv,
         signature=body.signature,
         signing_key_id=body.signing_key_id,
-        owner_epoch=body.owner_epoch if hasattr(body, "owner_epoch") else 1,
-        reader_epoch=body.reader_epoch if hasattr(body, "reader_epoch") else 0,
+        owner_epoch=body.owner_epoch,
+        reader_epoch=body.reader_epoch,
     )
     db.add(entry)
     db.commit()
@@ -120,8 +122,8 @@ def update_entry(entry_id: str, body: EntryIn, request: Request, db: Session = D
     e.dek_reader = body.dek_reader
     e.dek_reader_iv = body.dek_reader_iv
     e.signature = body.signature
-    e.owner_epoch = getattr(body, "owner_epoch", 1)
-    e.reader_epoch = getattr(body, "reader_epoch", 0)
+    e.owner_epoch = body.owner_epoch
+    e.reader_epoch = body.reader_epoch
     db.commit()
     return _to_out(e)
 

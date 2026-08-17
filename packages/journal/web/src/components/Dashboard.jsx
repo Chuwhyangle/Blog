@@ -16,6 +16,7 @@ export default function Dashboard() {
   const [writeKey, setWriteKey] = useState(false);    // 是否需要输主口令（作者写）
   const [rotateOpen, setRotateOpen] = useState(false);
   const [pendingEntry, setPendingEntry] = useState(null);   // 解锁后自动打开的目标条目
+  const [pendingNew, setPendingNew] = useState(false);       // 解锁后自动新建编辑器
   const [verificationWarnings, setVerificationWarnings] = useState([]);
 
   const isOwner = session?.role === 'owner';
@@ -91,9 +92,14 @@ export default function Dashboard() {
   // ── 新条目 ──
   function newEntry() {
     if (isOwner && !keys.owner) {
+      setPendingNew(true);
       setWriteKey(true);
       return;
     }
+    openNew();
+  }
+
+  function openNew() {
     if (!signingKey || !signingKeyId) {
       alert('签名密钥未加载，无法写日记');
       return;
@@ -134,7 +140,9 @@ export default function Dashboard() {
       {writeKey && isOwner && (
         <UnlockBox mode="owner" onDone={(kek) => {
           setKek('owner', kek); setWriteKey(false);
+          // 解锁后：要么接着打开条目，要么接着新建编辑器（断点续走）
           if (pendingEntry) { const t = pendingEntry; setPendingEntry(null); openEntry(t, kek); }
+          else if (pendingNew) { setPendingNew(false); openNew(); }
         }} />
       )}
 

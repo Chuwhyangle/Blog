@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { api } from '../lib/api';
 import { useStore } from '../lib/store';
 import Editor from './Editor';
+import RotateReader from './RotateReader';
 import {
   decryptEntry, verifyPayload, buildSignaturePayload, b64decode, hexToBytes,
   deriveKEK, verifyKEK,
@@ -14,6 +15,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(null);       // 正在编辑的条目（含解密后的明文）
   const [writeKey, setWriteKey] = useState(false);    // 是否需要输主口令（作者写）
+  const [rotateOpen, setRotateOpen] = useState(false);
   const [verificationWarnings, setVerificationWarnings] = useState([]);
 
   const isOwner = session?.role === 'owner';
@@ -109,6 +111,7 @@ export default function Dashboard() {
         <h1>📔 Journal</h1>
         <div className="right">
           {isOwner && <button className="ghost" onClick={newEntry}>✏️ 新日记</button>}
+          {isOwner && <button className="ghost" onClick={() => setRotateOpen(true)}>🔄 轮换读口令</button>}
           <button className="ghost" onClick={loadEntries}>↻ 刷新</button>
           <button className="ghost" onClick={clearSession}>退出</button>
         </div>
@@ -154,6 +157,16 @@ export default function Dashboard() {
           signingKey={signingKey}
           onClose={() => setEditing(null)}
           onSaved={() => { setEditing(null); loadEntries(); }}
+        />
+      )}
+
+      {rotateOpen && (
+        <RotateReader
+          onClose={() => setRotateOpen(false)}
+          onDone={() => {
+            setRotateOpen(false);
+            loadEntries();
+          }}
         />
       )}
     </div>

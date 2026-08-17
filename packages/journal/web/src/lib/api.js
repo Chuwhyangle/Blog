@@ -57,6 +57,7 @@ export const api = {
 
   // 元数据
   cryptoParams: () => request('GET', '/crypto/params'),
+  rotateReaderPassword: (body) => request('PUT', '/crypto/rotate-reader', body),
   signingKeys: () => request('GET', '/signing-keys'),
   escrow: () => request('GET', '/auth/recover/escrow'),
 

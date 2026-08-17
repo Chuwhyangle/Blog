@@ -16,6 +16,7 @@ import {
 export default function Setup({ onDone }) {
   const { setSession, setKek, setSigningKey, setSigningKeyId, keys, cryptoParams } = useStore();
   const [step, setStep] = useState(null);        // null=正在探测进度；0 管理员密码 → 1 口令 → 2 恢复码
+  const [cryptoAlreadySet, setCryptoAlreadySet] = useState(false);   // 口令已存在 → Step1 变解锁模式
   const [adminPw, setAdminPw] = useState('');
   const [adminPw2, setAdminPw2] = useState('');
   const [mainPw, setMainPw] = useState('');
@@ -31,6 +32,7 @@ export default function Setup({ onDone }) {
     (async () => {
       try {
         const s = await api.setupStatus();
+        setCryptoAlreadySet(s.crypto_params_set);
         if (s.signing_key_set) { onDone(); return; }          // 已完整初始化（理论走不到这里）
         if (s.crypto_params_set) setStep(1);                  // 口令已设 → 解锁（或重设）后进密钥步骤
         else if (s.admin_password_set) setStep(1);            // 密码已设 → 口令

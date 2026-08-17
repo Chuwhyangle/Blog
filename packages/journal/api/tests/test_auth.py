@@ -1,5 +1,6 @@
 """核心鉴权/过滤逻辑单元测试（不依赖真实 MySQL —— SQLite 内存库）"""
 import os, sys, uuid
+import base64
 from datetime import datetime, timezone, timedelta
 
 # 确保能 import 项目模块
@@ -248,3 +249,30 @@ class TestCryptoParams:
         r = client.get("/api/crypto/params")
         assert r.status_code == 200
         assert "owner" in r.json()
+
+    def test_rotate_reader_owner_only(self, client, db):
+        db.add(CryptoParam(role="reader", salt=b"\x00" * 32, params='{"m":32768,"t":2,"p":1}',
+                           verifier=b"\x00" * 64, verifier_iv=b"\x00" * 12))
+        db.commit()
+        body = {
+            "password": "new-reader-pw",
+            "salt": base64.b64encode(b"\x01" * 32).decode(),
+            "verifier": base64.b64encode(b"\x02" * 64).decode(),
+            "verifier_iv": base64.b64encode(b"\x03" * 12).decode(),
+        }
+        # 未登录 → 401
+        r = client.put("/api/crypto/rotate-reader", json=body)
+        assert r.status_code == 401
+        # reader 会话 → 403
+        reader_token = create_session(db, "reader", can_write=False)
+        r = client.put("/api/crypto/rotate-reader", json=body, cookies={SESSION_COOKIE: reader_token})
+        assert r.status_code == 403
+        # owner 且 can_write → 200 + epoch+1 + password_hash 更新
+        owner_token = make_owner_session(db)
+        r = client.put("/api/crypto/rotate-reader", json=body, cookies={SESSION_COOKIE: owner_token})
+        assert r.status_code == 200
+        j = r.json()
+        assert j["key_epoch"] == 2
+        row = db.query(CryptoParam).filter(CryptoParam.role == "reader").first()
+        assert row.salt == b"\x01" * 32
+        assert row.password_hash is not None

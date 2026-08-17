@@ -11,7 +11,10 @@ from argon2.exceptions import VerifyMismatchError
 
 from db import get_db
 from models import CryptoParam, SigningKey, Credential
-from security.sessions import create_session, set_session_cookie, destroy_session, parse_ip, get_session
+from security.sessions import (
+    create_session, set_session_cookie, destroy_session, parse_ip, get_session,
+    require_session,
+)
 
 router = APIRouter(tags=["auth"])
 
@@ -137,3 +140,53 @@ def signing_keys(request: Request, db: Session = Depends(get_db)):
         }
         for k in rows
     ]
+
+
+# ── 读口令轮换（⑤ §7 + ⑩ key_epoch）──────────────────
+# 前端流程：新读口令 → 派生新 KEK_reader' → 逐条重包 → 调本端点
+# 落库：password_hash（新口令在线校验）+ salt/params/verifier + key_epoch+1
+@router.put("/api/crypto/rotate-reader")
+def rotate_reader(body: dict, request: Request, db: Session = Depends(get_db)):
+    sess = require_session(db, request)
+    if sess.role != "owner" or not sess.can_write:
+        raise HTTPException(403, "仅主人可轮换读口令")
+
+    row = db.query(CryptoParam).filter(CryptoParam.role == "reader").first()
+    if not row:
+        raise HTTPException(404, "未初始化读口令")
+
+    password = (body.get("password") or "")
+    if len(password) < 8:
+        raise HTTPException(422, "新读口令至少 8 位")
+
+    try:
+        salt = base64.b64decode(body["salt"])
+        verifier = base64.b64decode(body["verifier"])
+        verifier_iv = base64.b64decode(body["verifier_iv"])
+    except KeyError as e:
+        raise HTTPException(422, f"缺少字段: {e}")
+    except Exception:
+        raise HTTPException(422, "salt/verifier 必须是 base64")
+
+    if len(salt) != 32:
+        raise HTTPException(422, "salt 必须 32 字节")
+    if len(verifier_iv) not in (12, 16):
+        raise HTTPException(422, "verifier_iv 必须 12 字节（GCM nonce）")
+
+    params = body.get("params") or row.params
+    try:
+        params_str = json.dumps(params) if isinstance(params, dict) else str(params)
+        params_obj = json.loads(params_str)
+    except Exception:
+        raise HTTPException(422, "params 必须是合法 JSON")
+    if not isinstance(params_obj, dict) or "m" not in params_obj:
+        raise HTTPException(422, "params 必须是 {\"m\":..,\"t\":..,\"p\":..}")
+
+    row.salt = salt
+    row.params = params_str
+    row.verifier = verifier
+    row.verifier_iv = verifier_iv
+    row.password_hash = ph.hash(password)
+    row.key_epoch = (row.key_epoch or 0) + 1
+    db.commit()
+    return {"ok": True, "key_epoch": row.key_epoch}

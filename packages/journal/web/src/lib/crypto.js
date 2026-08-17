@@ -175,11 +175,17 @@ export async function verifyPayload(publicKeyBytes, payload, signature) {
 export async function generateSigningKeyPair() {
   // 生成时 extractable=true（仅此瞬间，用于导出托管）
   const kp = await crypto.subtle.generateKey({ name: ED }, true, ['sign', 'verify']);
-  const raw = await crypto.subtle.exportKey('pkcs8', kp.privateKey);
-  // 重新导入不可导出的日常副本
-  const daily = await crypto.subtle.importKey('pkcs8', raw, { name: ED }, false, ['sign']);
-  const verifyKey = await crypto.subtle.importKey('spki', await crypto.subtle.exportKey('spki', kp.publicKey), { name: ED }, false, ['verify']);
-  return { privateKey: daily, publicKey: verifyKey, rawPrivatePkcs8: new Uint8Array(raw) };
+  const rawSk = await crypto.subtle.exportKey('pkcs8', kp.privateKey);
+  const rawPub = await crypto.subtle.exportKey('spki', kp.publicKey);
+  // 重新导入不可导出的日常副本（公钥也导入一份 verify 用）
+  const daily = await crypto.subtle.importKey('pkcs8', rawSk, { name: ED }, false, ['sign']);
+  const verifyKey = await crypto.subtle.importKey('spki', rawPub, { name: ED }, false, ['verify']);
+  return {
+    privateKey: daily,
+    publicKey: verifyKey,
+    rawPrivatePkcs8: new Uint8Array(rawSk),
+    rawPublicSpki: new Uint8Array(rawPub),   // 托管/登记公钥用（verifyKey 不可导出，需在生成瞬间取）
+  };
 }
 
 // ── 主流程：信封加密一条日记 ────────────────────────────

@@ -164,9 +164,8 @@ export default function Setup({ onDone }) {
         recovery_code: rec,   // 首次初始化：服务端存 Argon2id 哈希（恢复码换 elevated 会话用）
       });
 
-      // 5. 注册签名公钥到服务端
-      const pub = await crypto.subtle.exportKey('spki', kp.publicKey);
-      const raw48 = new Uint8Array(pub).slice(-32);   // Ed25519 公钥就是最后 32B
+      // 5. 注册签名公钥到服务端（公钥在生成瞬间已导出，verifyKey 本身不可导出）
+      const raw48 = kp.rawPublicSpki.slice(-32);   // Ed25519 公钥就是最后 32B
       const res = await fetch('/api/setup/signing-key', {
         method: 'POST',
         credentials: 'same-origin',

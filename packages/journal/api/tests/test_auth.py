@@ -195,6 +195,51 @@ class TestEntriesAuth:
         assert r.status_code == 422
 
 
+class TestEntriesCiphertextEncoding:
+    """回归：密文是二进制（AES-GCM 必然含非 UTF-8 字节），
+    序列化链路必须走 base64（field_serializer），不能强解 UTF-8。
+    曾经：bytes 字段被 jsonable_encoder/默认 pydantic 序列化强解 UTF-8 → 500。
+    """
+    def test_get_entry_with_non_utf8_ciphertext(self, client, db):
+        k = make_signing_key(db)
+        e = make_entry(db, k.key_id, "private")
+        e.ciphertext = b"\xff\xfe\x00\x80" * 12
+        db.commit()
+        token = make_owner_session(db)
+        r = client.get("/api/entries", cookies={SESSION_COOKIE: token})
+        assert r.status_code == 200
+        body = r.json()
+        assert len(body) == 1
+        import base64
+        assert body[0]["ciphertext"] == base64.b64encode(b"\xff\xfe\x00\x80" * 12).decode()
+
+    def test_post_entry_with_non_utf8_ciphertext(self, client, db):
+        k = make_signing_key(db)
+        token = make_owner_session(db)
+        import base64
+        payload = {
+            "id": uuid.uuid4().hex,
+            "visibility": "private",
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "ciphertext": base64.b64encode(b"\xff\xfe" * 20).decode(),
+            "iv": base64.b64encode(b"\x00" * 12).decode(),
+            "dek_owner": base64.b64encode(b"\x05" * 48).decode(),
+            "dek_owner_iv": base64.b64encode(b"\x06" * 12).decode(),
+            "signature": base64.b64encode(b"\x09" * 64).decode(),
+            "signing_key_id": k.key_id.hex(),
+            "owner_epoch": 1, "reader_epoch": 0,
+        }
+        r = client.post("/api/entries", json=payload, cookies={SESSION_COOKIE: token})
+        assert r.status_code == 201
+        out = r.json()
+        assert out["ciphertext"] == base64.b64encode(b"\xff\xfe" * 20).decode()
+        # 再 GET 拉出来验证同一条（回读不崩）
+        r2 = client.get("/api/entries", cookies={SESSION_COOKIE: token})
+        assert r2.status_code == 200
+        assert r2.json()[0]["ciphertext"] == out["ciphertext"]
+
+
 class TestCryptoParams:
     def test_crypto_params_public(self, client, db):
         db.add(CryptoParam(role="owner", salt=b"\x00" * 32, params='{"m":65536,"t":3,"p":1}',

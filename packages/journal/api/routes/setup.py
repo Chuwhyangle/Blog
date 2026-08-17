@@ -88,6 +88,11 @@ def setup_passwords(body: dict, request: Request, db: Session = Depends(get_db))
     if not owner or not reader:
         raise HTTPException(422, "缺少 owner/reader 参数")
 
+    # 半初始化重入保护：参数已存在时绝不允许覆盖（盐/参数/verifier 一经写入不可变）
+    for role in ("owner", "reader"):
+        if db.query(CryptoParam).filter(CryptoParam.role == role).count() > 0:
+            raise HTTPException(409, f"{role} 参数已初始化，不能覆盖")
+
     def _save(role: str, data: dict, with_password: bool = False) -> None:
         salt = base64.b64decode(data["salt"])
         params = json.dumps(data["params"])
